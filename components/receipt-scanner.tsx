@@ -9,7 +9,6 @@ import { cn } from "@/lib/utils"
 interface ReceiptScannerProps {
   onAmountExtracted: (amount: number) => void
   onClose: () => void
-  currency: string
 }
 
 interface ExtractedData {
@@ -19,7 +18,7 @@ interface ExtractedData {
   rawText: string
 }
 
-export default function ReceiptScanner({ onAmountExtracted, onClose, currency }: ReceiptScannerProps) {
+export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptScannerProps) {
   const [isProcessing, setIsProcessing] = useState(false)
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -343,11 +342,7 @@ export default function ReceiptScanner({ onAmountExtracted, onClose, currency }:
                         {Math.round(extractedData.confidence * 100)}% confidence)
                       </p>
                       <p className="text-3xl font-bold">
-                        {currency === 'USD' && '$'}
-                        {currency === 'EUR' && '€'}
-                        {currency === 'GBP' && '£'}
-                        {currency === 'JPY' && '¥'}
-                        {extractedData.amount.toFixed(2)}
+                        ${extractedData.amount.toFixed(2)}
                       </p>
                     </div>
 
@@ -376,11 +371,7 @@ export default function ReceiptScanner({ onAmountExtracted, onClose, currency }:
                                 onClick={() => confirmAmount(amount.value)}
                                 className="p-2 text-sm rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
                               >
-                                {currency === 'USD' && '$'}
-                                {currency === 'EUR' && '€'}
-                                {currency === 'GBP' && '£'}
-                                {currency === 'JPY' && '¥'}
-                                {amount.value.toFixed(2)}
+                                ${amount.value.toFixed(2)}
                               </button>
                             ))}
                         </div>

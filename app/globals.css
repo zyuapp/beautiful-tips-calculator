@@ -54,4 +54,36 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Improve number input appearance on mobile */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+  
+  /* Ensure proper touch target size on mobile */
+  @media (max-width: 640px) {
+    button, input, select {
+      min-height: 44px;
+    }
+  }
+  
+  /* Prevent text selection and tap highlights on buttons */
+  button {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Better touch handling */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
 }

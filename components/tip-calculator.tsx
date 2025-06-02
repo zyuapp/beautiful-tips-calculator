@@ -12,17 +12,10 @@ export default function TipCalculator() {
   const [customTip, setCustomTip] = useState("")
   const [numberOfPeople, setNumberOfPeople] = useState(1)
   const [darkMode, setDarkMode] = useState(false)
-  const [currency, setCurrency] = useState("USD")
   const [roundingMode, setRoundingMode] = useState<"none" | "up" | "down">("none")
   const [showScanner, setShowScanner] = useState(false)
   
   const tipPresets = [10, 15, 18, 20, 25]
-  const currencies = {
-    USD: { symbol: "$", name: "US Dollar" },
-    EUR: { symbol: "€", name: "Euro" },
-    GBP: { symbol: "£", name: "British Pound" },
-    JPY: { symbol: "¥", name: "Japanese Yen" },
-  }
 
   // Calculations
   const bill = parseFloat(billAmount) || 0
@@ -54,26 +47,23 @@ export default function TipCalculator() {
   // Load preferences from localStorage
   useEffect(() => {
     const savedDarkMode = localStorage.getItem("darkMode") === "true"
-    const savedCurrency = localStorage.getItem("currency") || "USD"
     const savedRounding = localStorage.getItem("roundingMode") as "none" | "up" | "down" || "none"
     
     setDarkMode(savedDarkMode)
-    setCurrency(savedCurrency)
     setRoundingMode(savedRounding)
   }, [])
 
   // Save preferences to localStorage
   useEffect(() => {
     localStorage.setItem("darkMode", darkMode.toString())
-    localStorage.setItem("currency", currency)
     localStorage.setItem("roundingMode", roundingMode)
-  }, [darkMode, currency, roundingMode])
+  }, [darkMode, roundingMode])
 
   const copyToClipboard = () => {
-    const text = `Bill: ${currencies[currency as keyof typeof currencies].symbol}${bill.toFixed(2)}
-Tip (${tip}%): ${currencies[currency as keyof typeof currencies].symbol}${tipAmount.toFixed(2)}
-Total: ${currencies[currency as keyof typeof currencies].symbol}${finalTotal.toFixed(2)}
-Split ${numberOfPeople} ways: ${currencies[currency as keyof typeof currencies].symbol}${finalPerPerson.toFixed(2)} each`
+    const text = `Bill: $${bill.toFixed(2)}
+Tip (${tip}%): $${tipAmount.toFixed(2)}
+Total: $${finalTotal.toFixed(2)}
+Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
     
     navigator.clipboard.writeText(text)
   }
@@ -124,17 +114,16 @@ Split ${numberOfPeople} ways: ${currencies[currency as keyof typeof currencies].
                   value={billAmount}
                   onChange={(e) => setBillAmount(e.target.value)}
                   placeholder="0.00"
-                  className="w-full pl-10 pr-16 py-3 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-12 py-3 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 />
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                <button
                   onClick={() => setShowScanner(true)}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-md hover:bg-accent transition-colors"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-md hover:bg-accent active:bg-accent/70 transition-colors flex items-center justify-center touch-manipulation"
                   title="Scan receipt"
+                  type="button"
                 >
                   <ScanLine className="h-5 w-5 text-primary" />
-                </motion.button>
+                </button>
               </div>
             </div>
 
@@ -178,46 +167,31 @@ Split ${numberOfPeople} ways: ${currencies[currency as keyof typeof currencies].
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Split Between</label>
               <div className="relative">
-                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none z-10" />
                 <input
                   type="number"
                   value={numberOfPeople}
                   onChange={(e) => setNumberOfPeople(Math.max(1, parseInt(e.target.value) || 1))}
                   min="1"
-                  className="w-full pl-10 pr-4 py-3 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  className="w-full pl-10 pr-4 py-3 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all appearance-none"
                 />
               </div>
             </div>
 
-            {/* Advanced Options */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Currency</label>
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                >
-                  {Object.entries(currencies).map(([code, { name }]) => (
-                    <option key={code} value={code}>
-                      {code} - {name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Rounding</label>
-                <select
-                  value={roundingMode}
-                  onChange={(e) => setRoundingMode(e.target.value as "none" | "up" | "down")}
-                  className="w-full px-3 py-2 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                >
-                  <option value="none">No Rounding</option>
-                  <option value="up">Round Up</option>
-                  <option value="down">Round Down</option>
-                </select>
-              </div>
+            {/* Rounding Options */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Rounding</label>
+              <select
+                value={roundingMode}
+                onChange={(e) => setRoundingMode(e.target.value as "none" | "up" | "down")}
+                className="w-full px-3 py-2 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+              >
+                <option value="none">No Rounding</option>
+                <option value="up">Round Up</option>
+                <option value="down">Round Down</option>
+              </select>
             </div>
 
             {/* Results */}
@@ -232,15 +206,13 @@ Split ${numberOfPeople} ways: ${currencies[currency as keyof typeof currencies].
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Tip Amount</p>
                     <p className="text-2xl font-bold">
-                      {currencies[currency as keyof typeof currencies].symbol}
-                      {tipAmount.toFixed(2)}
+                      ${tipAmount.toFixed(2)}
                     </p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Total Amount</p>
                     <p className="text-2xl font-bold">
-                      {currencies[currency as keyof typeof currencies].symbol}
-                      {finalTotal.toFixed(2)}
+                      ${finalTotal.toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -250,23 +222,20 @@ Split ${numberOfPeople} ways: ${currencies[currency as keyof typeof currencies].
                   <div className="flex justify-between items-center">
                     <span>Amount</span>
                     <span className="font-bold">
-                      {currencies[currency as keyof typeof currencies].symbol}
-                      {finalPerPerson.toFixed(2)}
+                      ${finalPerPerson.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span>Tip</span>
                     <span className="font-bold">
-                      {currencies[currency as keyof typeof currencies].symbol}
-                      {tipPerPerson.toFixed(2)}
+                      ${tipPerPerson.toFixed(2)}
                     </span>
                   </div>
                 </div>
 
                 {numberOfPeople > 1 && (
                   <p className="text-center text-sm text-muted-foreground">
-                    You saved {currencies[currency as keyof typeof currencies].symbol}
-                    {(finalTotal - finalPerPerson).toFixed(2)} by splitting!
+                    You saved ${(finalTotal - finalPerPerson).toFixed(2)} by splitting!
                   </p>
                 )}
 
@@ -305,7 +274,6 @@ Split ${numberOfPeople} ways: ${currencies[currency as keyof typeof currencies].
               setShowScanner(false)
             }}
             onClose={() => setShowScanner(false)}
-            currency={currency}
           />
         )}
       </AnimatePresence>
