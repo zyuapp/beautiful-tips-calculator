@@ -1,10 +1,10 @@
 "use client"
 
 import { useState, useRef, useCallback } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import { Camera, Upload, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import Tesseract from "tesseract.js"
-import { cn } from "@/lib/utils"
+import NextImage from "next/image"
 
 interface ReceiptScannerProps {
   onAmountExtracted: (amount: number) => void
@@ -240,6 +240,21 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
                 Take a photo or upload an image of your receipt
               </p>
               
+              {/* Privacy Notice */}
+              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <svg className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                  <div className="text-sm text-green-700 dark:text-green-300">
+                    <p className="font-medium">100% Private & Secure</p>
+                    <p className="text-xs mt-1 opacity-90">
+                      All processing happens in your browser. No images are uploaded to any server.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
               {/* Camera and Upload buttons */}
               <div className="grid grid-cols-2 gap-4">
                 <motion.button
@@ -304,11 +319,14 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
                 </div>
               </div>
               {imagePreview && (
-                <img
-                  src={imagePreview}
-                  alt="Receipt preview"
-                  className="w-full rounded-lg opacity-50"
-                />
+                <div className="relative w-full h-64">
+                  <NextImage
+                    src={imagePreview}
+                    alt="Receipt preview"
+                    fill
+                    className="object-contain rounded-lg opacity-50"
+                  />
+                </div>
               )}
             </div>
           )}
@@ -317,11 +335,14 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
           {extractedData && !isProcessing && (
             <div className="space-y-6">
               {imagePreview && (
-                <img
-                  src={imagePreview}
-                  alt="Receipt preview"
-                  className="w-full rounded-lg"
-                />
+                <div className="relative w-full h-96">
+                  <NextImage
+                    src={imagePreview}
+                    alt="Receipt preview"
+                    fill
+                    className="object-contain rounded-lg"
+                  />
+                </div>
               )}
 
               <div className="space-y-4">
