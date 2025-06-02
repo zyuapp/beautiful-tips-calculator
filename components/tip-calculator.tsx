@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { DollarSign, Users, Percent, Copy, Moon, Sun, ScanLine } from "lucide-react"
+import { DollarSign, Users, Percent, Copy, Moon, Sun, ScanLine, Minus, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import ReceiptScanner from "./receipt-scanner"
 
@@ -166,32 +166,108 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
             {/* Number of People */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Split Between</label>
-              <div className="relative">
-                <Users className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none z-10" />
-                <input
-                  type="number"
-                  value={numberOfPeople}
-                  onChange={(e) => setNumberOfPeople(Math.max(1, parseInt(e.target.value) || 1))}
-                  min="1"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  className="w-full pl-10 pr-4 py-3 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all appearance-none"
-                />
+              
+              {/* Quick presets */}
+              <div className="grid grid-cols-4 gap-2 mb-3">
+                {[1, 2, 3, 4].map((num) => (
+                  <motion.button
+                    key={num}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setNumberOfPeople(num)}
+                    className={cn(
+                      "py-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-1",
+                      numberOfPeople === num
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-secondary hover:bg-secondary/80"
+                    )}
+                  >
+                    <Users className="h-4 w-4" />
+                    <span>{num}</span>
+                  </motion.button>
+                ))}
+              </div>
+              
+              {/* Custom number with stepper */}
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50">
+                <button
+                  onClick={() => setNumberOfPeople(Math.max(1, numberOfPeople - 1))}
+                  className="p-2 rounded-md hover:bg-accent active:bg-accent/70 transition-colors touch-manipulation"
+                  type="button"
+                  disabled={numberOfPeople <= 1}
+                >
+                  <Minus className="h-5 w-5" />
+                </button>
+                
+                <div className="flex-1 text-center">
+                  <div className="text-2xl font-bold">{numberOfPeople}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {numberOfPeople === 1 ? 'person' : 'people'}
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => setNumberOfPeople(numberOfPeople + 1)}
+                  className="p-2 rounded-md hover:bg-accent active:bg-accent/70 transition-colors touch-manipulation"
+                  type="button"
+                >
+                  <Plus className="h-5 w-5" />
+                </button>
               </div>
             </div>
 
             {/* Rounding Options */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Rounding</label>
-              <select
-                value={roundingMode}
-                onChange={(e) => setRoundingMode(e.target.value as "none" | "up" | "down")}
-                className="w-full px-3 py-2 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-              >
-                <option value="none">No Rounding</option>
-                <option value="up">Round Up</option>
-                <option value="down">Round Down</option>
-              </select>
+              <div className="grid grid-cols-3 gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setRoundingMode("none")}
+                  className={cn(
+                    "py-2.5 px-3 rounded-lg font-medium transition-all",
+                    roundingMode === "none"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary hover:bg-secondary/80"
+                  )}
+                  type="button"
+                >
+                  <div className="text-sm">None</div>
+                  <div className="text-xs opacity-70">¢.99</div>
+                </motion.button>
+                
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setRoundingMode("up")}
+                  className={cn(
+                    "py-2.5 px-3 rounded-lg font-medium transition-all",
+                    roundingMode === "up"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary hover:bg-secondary/80"
+                  )}
+                  type="button"
+                >
+                  <div className="text-sm">Round Up</div>
+                  <div className="text-xs opacity-70">$1.00</div>
+                </motion.button>
+                
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setRoundingMode("down")}
+                  className={cn(
+                    "py-2.5 px-3 rounded-lg font-medium transition-all",
+                    roundingMode === "down"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-secondary hover:bg-secondary/80"
+                  )}
+                  type="button"
+                >
+                  <div className="text-sm">Round Down</div>
+                  <div className="text-xs opacity-70">$0.00</div>
+                </motion.button>
+              </div>
             </div>
 
             {/* Results */}
