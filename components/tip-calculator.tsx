@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { motion } from "framer-motion"
-import { DollarSign, Users, Percent, Copy, Moon, Sun } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { DollarSign, Users, Percent, Copy, Moon, Sun, ScanLine } from "lucide-react"
 import { cn } from "@/lib/utils"
+import ReceiptScanner from "./receipt-scanner"
 
 export default function TipCalculator() {
   const [billAmount, setBillAmount] = useState("")
@@ -13,6 +14,7 @@ export default function TipCalculator() {
   const [darkMode, setDarkMode] = useState(false)
   const [currency, setCurrency] = useState("USD")
   const [roundingMode, setRoundingMode] = useState<"none" | "up" | "down">("none")
+  const [showScanner, setShowScanner] = useState(false)
   
   const tipPresets = [10, 15, 18, 20, 25]
   const currencies = {
@@ -122,8 +124,17 @@ Split ${numberOfPeople} ways: ${currencies[currency as keyof typeof currencies].
                   value={billAmount}
                   onChange={(e) => setBillAmount(e.target.value)}
                   placeholder="0.00"
-                  className="w-full pl-10 pr-4 py-3 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className="w-full pl-10 pr-16 py-3 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
                 />
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowScanner(true)}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 rounded-md hover:bg-accent transition-colors"
+                  title="Scan receipt"
+                >
+                  <ScanLine className="h-5 w-5 text-primary" />
+                </motion.button>
               </div>
             </div>
 
@@ -284,6 +295,20 @@ Split ${numberOfPeople} ways: ${currencies[currency as keyof typeof currencies].
           </motion.div>
         </motion.div>
       </div>
+
+      {/* Receipt Scanner Modal */}
+      <AnimatePresence>
+        {showScanner && (
+          <ReceiptScanner
+            onAmountExtracted={(amount) => {
+              setBillAmount(amount.toFixed(2))
+              setShowScanner(false)
+            }}
+            onClose={() => setShowScanner(false)}
+            currency={currency}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
