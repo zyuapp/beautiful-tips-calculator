@@ -84,7 +84,6 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
     // Try to find total using patterns
     let totalAmount = 0
     let confidence = 0
-    let matchedPattern = null
 
     for (const pattern of totalPatterns) {
       const match = text.match(pattern)
@@ -98,7 +97,6 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
         if (isAmongLargest) {
           totalAmount = matchedValue
           confidence = 0.95 // Very high confidence
-          matchedPattern = pattern.toString()
           break
         }
       }
