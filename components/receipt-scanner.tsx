@@ -32,14 +32,31 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
     const lines = text.split('\n')
     const amounts: Array<{ value: number; context: string }> = []
     
-    // Common patterns for total amounts
+    // Patterns that indicate NOT the final total
+    const excludePatterns = [
+      /SUB\s*TOTAL/i,
+      /SUBTOTAL/i,
+      /SUB-TOTAL/i,
+      /BEFORE\s*TAX/i,
+      /FOOD\s*TOTAL/i,
+      /MERCHANDISE/i,
+      /ITEMS?\s*TOTAL/i,
+    ]
+    
+    // Common patterns for total amounts (ordered by priority)
     const totalPatterns = [
-      /TOTAL[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
-      /AMOUNT DUE[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
-      /BALANCE[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
-      /GRAND TOTAL[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
-      /TO PAY[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
-      /[$€£¥]\s*(\d+[.,]\d{2})\s*(?:TOTAL|DUE)/i,
+      // Highest priority - very specific total patterns
+      /(?:GRAND\s*TOTAL|AMOUNT\s*DUE|BALANCE\s*DUE|PLEASE\s*PAY)[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
+      /TOTAL\s*(?:DUE|AMOUNT|CHARGE)[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
+      
+      // Medium priority - generic total but not subtotal
+      /^TOTAL[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/im,
+      /(?<!SUB)TOTAL[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
+      
+      // Lower priority - other payment indicators
+      /TO\s*PAY[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
+      /CHARGE[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
+      /[$€£¥]\s*(\d+[.,]\d{2})\s*(?:TOTAL|DUE)$/i,
     ]
 
     // General amount pattern
@@ -47,12 +64,19 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
 
     // Extract all amounts with context
     lines.forEach((line, index) => {
+      // Skip lines that match exclude patterns
+      const shouldExclude = excludePatterns.some(pattern => line.match(pattern))
+      
       const matches = line.matchAll(amountPattern)
       for (const match of matches) {
         const value = parseFloat(match[1].replace(',', '.'))
         if (!isNaN(value) && value > 0) {
           const context = lines.slice(Math.max(0, index - 1), Math.min(lines.length, index + 2)).join(' ')
-          amounts.push({ value, context })
+          // Mark if this amount should be excluded
+          amounts.push({ 
+            value, 
+            context: shouldExclude ? `[EXCLUDED] ${context}` : context 
+          })
         }
       }
     })
@@ -60,49 +84,82 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
     // Try to find total using patterns
     let totalAmount = 0
     let confidence = 0
+    let matchedPattern = null
 
     for (const pattern of totalPatterns) {
       const match = text.match(pattern)
       if (match) {
-        totalAmount = parseFloat(match[1].replace(',', '.'))
-        confidence = 0.9 // High confidence if pattern matched
-        break
+        const matchedValue = parseFloat(match[1].replace(',', '.'))
+        
+        // Verify this is likely the total by checking if it's one of the larger amounts
+        const sortedAmounts = [...amounts].sort((a, b) => b.value - a.value)
+        const isAmongLargest = sortedAmounts.slice(0, 3).some(a => Math.abs(a.value - matchedValue) < 0.01)
+        
+        if (isAmongLargest) {
+          totalAmount = matchedValue
+          confidence = 0.95 // Very high confidence
+          matchedPattern = pattern.toString()
+          break
+        }
       }
     }
 
-    // If no pattern matched, use heuristics
+    // If no pattern matched, use advanced heuristics
     if (totalAmount === 0 && amounts.length > 0) {
-      // Sort amounts by value
-      const sortedAmounts = [...amounts].sort((a, b) => b.value - a.value)
+      // Filter out excluded amounts
+      const validAmounts = amounts.filter(a => !a.context.includes('[EXCLUDED]'))
       
-      // Check if the largest amount appears near the end of the receipt
-      const largestAmount = sortedAmounts[0]
-      const largestIndex = amounts.findIndex(a => a.value === largestAmount.value)
-      
-      if (largestIndex > amounts.length * 0.6) {
-        // Largest amount is in the bottom 40% of the receipt
-        totalAmount = largestAmount.value
-        confidence = 0.7
-      } else {
-        // Look for amounts near keywords
-        const keywordAmount = amounts.find(a => 
-          a.context.match(/total|due|balance|pay|amount/i)
-        )
-        if (keywordAmount) {
-          totalAmount = keywordAmount.value
-          confidence = 0.6
-        } else {
-          // Fallback to largest amount
-          totalAmount = largestAmount.value
-          confidence = 0.4
+      if (validAmounts.length > 0) {
+        // Sort amounts by value
+        const sortedAmounts = [...validAmounts].sort((a, b) => b.value - a.value)
+        
+        // Look for tax pattern to help identify total
+        const taxPattern = /(?:TAX|HST|GST|PST|VAT)[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i
+        const taxMatch = text.match(taxPattern)
+        const taxAmount = taxMatch ? parseFloat(taxMatch[1].replace(',', '.')) : 0
+        
+        // If we found tax, look for an amount that's larger than subtotal + tax
+        if (taxAmount > 0) {
+          const possibleTotal = sortedAmounts.find(a => {
+            // Check if this could be subtotal + tax (within 10 cents tolerance)
+            const subtotalCandidates = sortedAmounts.filter(s => s.value < a.value)
+            return subtotalCandidates.some(sub => 
+              Math.abs((sub.value + taxAmount) - a.value) < 0.10
+            )
+          })
+          
+          if (possibleTotal) {
+            totalAmount = possibleTotal.value
+            confidence = 0.85
+          }
         }
+        
+        // If still no total, use position-based heuristics
+        if (totalAmount === 0) {
+          // Find the largest amount in the bottom 40% of the receipt
+          const bottomAmounts = validAmounts.slice(Math.floor(validAmounts.length * 0.6))
+          if (bottomAmounts.length > 0) {
+            const largestInBottom = bottomAmounts.sort((a, b) => b.value - a.value)[0]
+            totalAmount = largestInBottom.value
+            confidence = 0.7
+          } else {
+            // Last resort: largest valid amount
+            totalAmount = sortedAmounts[0].value
+            confidence = 0.5
+          }
+        }
+      } else {
+        // All amounts were excluded, use largest anyway with low confidence
+        const sortedAll = [...amounts].sort((a, b) => b.value - a.value)
+        totalAmount = sortedAll[0]?.value || 0
+        confidence = 0.3
       }
     }
 
     return {
       amount: totalAmount,
       confidence,
-      allAmounts: amounts,
+      allAmounts: amounts.filter(a => !a.context.includes('[EXCLUDED]')),
       rawText: text
     }
   }
