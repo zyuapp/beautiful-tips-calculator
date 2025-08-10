@@ -60,3 +60,4 @@ This is a **Next.js 15** tip calculator app with **App Router** architecture. Th
 - Prefer `const` for component definitions
 - Use TypeScript interfaces for props and complex data structures
 - Follow Next.js App Router conventions for file naming and structure
+- Remember at the end of each request run build and lint to make sure there is no error
