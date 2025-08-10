@@ -28,7 +28,7 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
   // Pattern matching for common receipt formats
-  const extractAmounts = (text: string): ExtractedData => {
+  const extractAmounts = useCallback((text: string): ExtractedData => {
     const lines = text.split('\n')
     const amounts: Array<{ value: number; context: string }> = []
     
@@ -43,24 +43,24 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
       /ITEMS?\s*TOTAL/i,
     ]
     
-    // Common patterns for total amounts (ordered by priority)
+    // Common patterns for total amounts (ordered by priority) - supporting European formats
     const totalPatterns = [
       // Highest priority - very specific total patterns
-      /(?:GRAND\s*TOTAL|AMOUNT\s*DUE|BALANCE\s*DUE|PLEASE\s*PAY)[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
-      /TOTAL\s*(?:DUE|AMOUNT|CHARGE)[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
+      /(?:GRAND\s*TOTAL|AMOUNT\s*DUE|BALANCE\s*DUE|PLEASE\s*PAY)[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i,
+      /TOTAL\s*(?:DUE|AMOUNT|CHARGE)[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i,
       
       // Medium priority - generic total but not subtotal
-      /^TOTAL[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/im,
-      /(?<!SUB)TOTAL[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
+      /^TOTAL[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/im,
+      /(?<!SUB)TOTAL[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i,
       
       // Lower priority - other payment indicators
-      /TO\s*PAY[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
-      /CHARGE[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i,
-      /[$€£¥]\s*(\d+[.,]\d{2})\s*(?:TOTAL|DUE)$/i,
+      /TO\s*PAY[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i,
+      /CHARGE[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i,
+      /[$€£¥₹₽]\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s*(?:TOTAL|DUE)$/i,
     ]
 
-    // General amount pattern
-    const amountPattern = /[$€£¥]?\s*(\d+[.,]\d{2})/g
+    // Enhanced amount pattern supporting European formats and more currencies
+    const amountPattern = /[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})|(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s*[$€£¥₹₽]/g
 
     // Extract all amounts with context
     lines.forEach((line, index) => {
@@ -69,8 +69,29 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
       
       const matches = line.matchAll(amountPattern)
       for (const match of matches) {
-        const value = parseFloat(match[1].replace(',', '.'))
-        if (!isNaN(value) && value > 0) {
+        const valueStr = match[1] || match[2]
+        
+        // Handle European decimal format (1.234,56 -> 1234.56)
+        let value: number
+        if (valueStr.includes(',') && valueStr.includes('.')) {
+          // Format like 1.234,56
+          const normalized = valueStr.replace(/\./g, '').replace(',', '.')
+          value = parseFloat(normalized)
+        } else if (valueStr.includes(',') && !valueStr.includes('.')) {
+          // Format like 123,45 - check if it's decimal or thousands separator
+          const parts = valueStr.split(',')
+          if (parts[parts.length - 1].length === 2) {
+            // Last part is 2 digits, treat comma as decimal
+            value = parseFloat(valueStr.replace(',', '.'))
+          } else {
+            // Treat as thousands separator
+            value = parseFloat(valueStr.replace(/,/g, ''))
+          }
+        } else {
+          value = parseFloat(valueStr.replace(/,/g, ''))
+        }
+        
+        if (!isNaN(value) && value > 0 && value < 10000) {
           const context = lines.slice(Math.max(0, index - 1), Math.min(lines.length, index + 2)).join(' ')
           // Mark if this amount should be excluded
           amounts.push({ 
@@ -88,7 +109,27 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
     for (const pattern of totalPatterns) {
       const match = text.match(pattern)
       if (match) {
-        const matchedValue = parseFloat(match[1].replace(',', '.'))
+        const valueStr = match[1]
+        
+        // Handle European decimal format for pattern matches too
+        let matchedValue: number
+        if (valueStr.includes(',') && valueStr.includes('.')) {
+          // Format like 1.234,56
+          const normalized = valueStr.replace(/\./g, '').replace(',', '.')
+          matchedValue = parseFloat(normalized)
+        } else if (valueStr.includes(',') && !valueStr.includes('.')) {
+          // Format like 123,45 - check if it's decimal or thousands separator
+          const parts = valueStr.split(',')
+          if (parts[parts.length - 1].length === 2) {
+            // Last part is 2 digits, treat comma as decimal
+            matchedValue = parseFloat(valueStr.replace(',', '.'))
+          } else {
+            // Treat as thousands separator
+            matchedValue = parseFloat(valueStr.replace(/,/g, ''))
+          }
+        } else {
+          matchedValue = parseFloat(valueStr.replace(/,/g, ''))
+        }
         
         // Verify this is likely the total by checking if it's one of the larger amounts
         const sortedAmounts = [...amounts].sort((a, b) => b.value - a.value)
@@ -112,9 +153,26 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
         const sortedAmounts = [...validAmounts].sort((a, b) => b.value - a.value)
         
         // Look for tax pattern to help identify total
-        const taxPattern = /(?:TAX|HST|GST|PST|VAT)[:\s]+[$€£¥]?\s*(\d+[.,]\d{2})/i
+        const taxPattern = /(?:TAX|HST|GST|PST|VAT)[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i
         const taxMatch = text.match(taxPattern)
-        const taxAmount = taxMatch ? parseFloat(taxMatch[1].replace(',', '.')) : 0
+        let taxAmount = 0
+        if (taxMatch) {
+          const taxStr = taxMatch[1]
+          // Handle European decimal format for tax too
+          if (taxStr.includes(',') && taxStr.includes('.')) {
+            const normalized = taxStr.replace(/\./g, '').replace(',', '.')
+            taxAmount = parseFloat(normalized)
+          } else if (taxStr.includes(',') && !taxStr.includes('.')) {
+            const parts = taxStr.split(',')
+            if (parts[parts.length - 1].length === 2) {
+              taxAmount = parseFloat(taxStr.replace(',', '.'))
+            } else {
+              taxAmount = parseFloat(taxStr.replace(/,/g, ''))
+            }
+          } else {
+            taxAmount = parseFloat(taxStr.replace(/,/g, ''))
+          }
+        }
         
         // If we found tax, look for an amount that's larger than subtotal + tax
         if (taxAmount > 0) {
@@ -160,10 +218,10 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
       allAmounts: amounts.filter(a => !a.context.includes('[EXCLUDED]')),
       rawText: text
     }
-  }
+  }, [])
 
-  // Image preprocessing
-  const preprocessImage = (img: HTMLImageElement): string => {
+  // Image preprocessing with adaptive thresholds
+  const preprocessImage = useCallback((img: HTMLImageElement, mode: 'normal' | 'high-contrast' | 'low-contrast' = 'normal'): string => {
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')!
     
@@ -180,27 +238,61 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
     const data = imageData.data
     
-    // Convert to grayscale and increase contrast
+    // Calculate average brightness
+    let brightnessSum = 0
     for (let i = 0; i < data.length; i += 4) {
-      // Grayscale
       const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
+      brightnessSum += gray
+    }
+    const avgBrightness = brightnessSum / (data.length / 4)
+    
+    // Adaptive threshold and contrast based on mode and brightness
+    let factor: number
+    let threshold: number
+    
+    switch (mode) {
+      case 'high-contrast':
+        factor = avgBrightness < 100 ? 2.5 : avgBrightness > 180 ? 1.8 : 2.0
+        threshold = avgBrightness < 80 ? 90 : avgBrightness > 200 ? 150 : 120
+        break
+      case 'low-contrast':
+        factor = avgBrightness < 100 ? 1.2 : avgBrightness > 180 ? 0.8 : 1.0
+        threshold = avgBrightness < 80 ? 110 : avgBrightness > 200 ? 130 : 135
+        break
+      default: // normal
+        factor = avgBrightness < 100 ? 2.0 : avgBrightness > 180 ? 1.2 : 1.5
+        threshold = avgBrightness < 80 ? 100 : avgBrightness > 200 ? 140 : 128
+    }
+    
+    // Apply enhanced processing
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
+      const contrasted = gray * factor + (128 * (1 - factor))
+      const final = contrasted > threshold ? 255 : contrasted < 50 ? 0 : contrasted
       
-      // Increase contrast
-      const factor = 1.5
-      const intercept = 128 * (1 - factor)
-      const contrastedGray = gray * factor + intercept
-      
-      // Apply threshold for better OCR
-      const threshold = contrastedGray > 128 ? 255 : contrastedGray < 50 ? 0 : contrastedGray
-      
-      data[i] = threshold
-      data[i + 1] = threshold
-      data[i + 2] = threshold
+      data[i] = final
+      data[i + 1] = final
+      data[i + 2] = final
     }
     
     ctx.putImageData(imageData, 0, 0)
     return canvas.toDataURL()
-  }
+  }, [])
+
+  // Helper function to try OCR with different processing modes
+  const tryOCR = useCallback(async (img: HTMLImageElement, mode: 'normal' | 'high-contrast' | 'low-contrast'): Promise<ExtractedData> => {
+    const processedUrl = preprocessImage(img, mode)
+    
+    const result = await Tesseract.recognize(processedUrl, 'eng', {
+      logger: (m) => {
+        if (m.status === 'recognizing text') {
+          setProgress(Math.round(m.progress * 100))
+        }
+      },
+    })
+    
+    return extractAmounts(result.data.text)
+  }, [preprocessImage, extractAmounts])
 
   const processImage = useCallback(async (file: File) => {
     setIsProcessing(true)
@@ -215,7 +307,7 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
       }
       reader.readAsDataURL(file)
 
-      // Load and preprocess image
+      // Load image
       const img = new Image()
       const imageUrl = URL.createObjectURL(file)
       
@@ -225,30 +317,47 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
         img.src = imageUrl
       })
 
-      const processedImageUrl = preprocessImage(img)
+      // Try normal processing first
+      let result = await tryOCR(img, 'normal')
+      
+      if (result.confidence < 0.3 && result.amount === 0) {
+        setProgress(50) // Show we're trying again
+        
+        // Try with higher contrast for dark images
+        result = await tryOCR(img, 'high-contrast')
+        
+        if (result.confidence < 0.3 && result.amount === 0) {
+          setProgress(75)
+          // Try with lower contrast for bright images  
+          result = await tryOCR(img, 'low-contrast')
+        }
+      }
 
-      // Perform OCR
-      const result = await Tesseract.recognize(processedImageUrl, 'eng', {
-        logger: (m) => {
-          if (m.status === 'recognizing text') {
-            setProgress(Math.round(m.progress * 100))
-          }
-        },
-      })
+      setExtractedData(result)
 
-      // Extract amounts from text
-      const extractedData = extractAmounts(result.data.text)
-      setExtractedData(extractedData)
+      // Set better error messages if no amount found
+      if (result.amount === 0) {
+        const { allAmounts, rawText } = result
+        if (rawText.length < 10) {
+          setError("Couldn't read text from image. Try better lighting or hold phone steadier.")
+        } else if (allAmounts.length === 0) {
+          setError("Found text but no amounts. Make sure the total is visible and try again.")
+        } else if (allAmounts.length === 1) {
+          setError(`Found $${allAmounts[0].value.toFixed(2)} but unsure if it's the total. Click to use it anyway.`)
+        } else {
+          setError(`Found ${allAmounts.length} amounts. Click one below or try a clearer image.`)
+        }
+      }
 
       // Clean up
       URL.revokeObjectURL(imageUrl)
     } catch (err) {
       console.error('OCR Error:', err)
-      setError('Failed to process receipt. Please try again with a clearer image.')
+      setError('Could not process image. Try a different photo.')
     } finally {
       setIsProcessing(false)
     }
-  }, [])
+  }, [tryOCR])
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -433,24 +542,35 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
 
                     {/* Show other detected amounts */}
                     {extractedData.allAmounts.length > 1 && (
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium text-muted-foreground">
+                      <div className="mt-4">
+                        <p className="text-sm font-medium text-muted-foreground mb-2">
                           Other amounts found:
                         </p>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-4 gap-2">
                           {extractedData.allAmounts
                             .filter(a => a.value !== extractedData.amount)
-                            .slice(0, 6)
+                            .slice(0, 8)
                             .map((amount, index) => (
                               <button
                                 key={index}
                                 onClick={() => confirmAmount(amount.value)}
-                                className="p-2 text-sm rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
+                                className="p-2 text-sm rounded-lg bg-secondary hover:bg-secondary/80 transition-colors text-center"
+                                title={amount.context}
                               >
                                 ${amount.value.toFixed(2)}
                               </button>
                             ))}
                         </div>
+                        <button
+                          onClick={() => {
+                            const manual = prompt('Enter amount manually:')
+                            const amount = parseFloat(manual || '0')
+                            if (amount > 0) confirmAmount(amount)
+                          }}
+                          className="w-full mt-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Enter amount manually
+                        </button>
                       </div>
                     )}
                   </div>
@@ -482,10 +602,45 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
             <div className="text-center space-y-4">
               <AlertCircle className="h-12 w-12 text-destructive mx-auto" />
               <p className="text-destructive">{error}</p>
+              
+              {/* Show clickable amounts if available */}
+              {extractedData && extractedData.allAmounts.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm font-medium text-muted-foreground mb-2">
+                    {extractedData.allAmounts.length === 1 ? "Use this amount:" : "Other amounts found:"}
+                  </p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {extractedData.allAmounts
+                      .slice(0, 8)
+                      .map((amount, index) => (
+                        <button
+                          key={index}
+                          onClick={() => confirmAmount(amount.value)}
+                          className="p-2 text-sm rounded-lg bg-secondary hover:bg-secondary/80 transition-colors text-center"
+                          title={amount.context}
+                        >
+                          ${amount.value.toFixed(2)}
+                        </button>
+                      ))}
+                  </div>
+                  <button
+                    onClick={() => {
+                      const manual = prompt('Enter amount manually:')
+                      const amount = parseFloat(manual || '0')
+                      if (amount > 0) confirmAmount(amount)
+                    }}
+                    className="w-full mt-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Enter amount manually
+                  </button>
+                </div>
+              )}
+              
               <button
                 onClick={() => {
                   setError(null)
                   setImagePreview(null)
+                  setExtractedData(null)
                 }}
                 className="text-sm underline"
               >
