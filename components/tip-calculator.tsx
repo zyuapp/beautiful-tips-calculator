@@ -23,7 +23,6 @@ export default function TipCalculator() {
   const tipAmount = bill * (tip / 100)
   const totalAmount = bill + tipAmount
   const perPersonAmount = totalAmount / numberOfPeople
-  const tipPerPerson = tipAmount / numberOfPeople
 
   // Apply rounding
   const applyRounding = (amount: number) => {
@@ -34,6 +33,8 @@ export default function TipCalculator() {
 
   const finalPerPerson = applyRounding(perPersonAmount)
   const finalTotal = finalPerPerson * numberOfPeople
+  const finalTipAmount = finalTotal - bill
+  const finalTipPerPerson = finalTipAmount / numberOfPeople
 
   // Dark mode effect
   useEffect(() => {
@@ -61,7 +62,7 @@ export default function TipCalculator() {
 
   const copyToClipboard = () => {
     const text = `Bill: $${bill.toFixed(2)}
-Tip (${tip}%): $${tipAmount.toFixed(2)}
+Tip (${tip}%): $${finalTipAmount.toFixed(2)}
 Total: $${finalTotal.toFixed(2)}
 Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
     
@@ -282,7 +283,7 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Tip Amount</p>
                     <p className="text-2xl font-bold">
-                      ${tipAmount.toFixed(2)}
+                      ${finalTipAmount.toFixed(2)}
                     </p>
                   </div>
                   <div className="space-y-1">
@@ -304,7 +305,7 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                   <div className="flex justify-between items-center">
                     <span>Tip</span>
                     <span className="font-bold">
-                      ${tipPerPerson.toFixed(2)}
+                      ${finalTipPerPerson.toFixed(2)}
                     </span>
                   </div>
                 </div>
