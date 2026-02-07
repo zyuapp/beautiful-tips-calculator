@@ -5,6 +5,13 @@ import { motion } from "framer-motion"
 import { Camera, Upload, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
 import Tesseract from "tesseract.js"
 import NextImage from "next/image"
+import {
+  parseCurrencyString,
+  isValidReceiptAmount,
+  validateTotalRelationship,
+  categorizeAmount,
+  type ExtractedAmount,
+} from "@/lib/number-utils"
 
 interface ReceiptScannerProps {
   onAmountExtracted: (amount: number) => void
@@ -43,60 +50,44 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
       /ITEMS?\s*TOTAL/i,
     ]
     
-    // Common patterns for total amounts (ordered by priority) - supporting European formats
+    // Common patterns for total amounts (ordered by priority)
     const totalPatterns = [
       // Highest priority - very specific total patterns
-      /(?:GRAND\s*TOTAL|AMOUNT\s*DUE|BALANCE\s*DUE|PLEASE\s*PAY)[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i,
-      /TOTAL\s*(?:DUE|AMOUNT|CHARGE)[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i,
-      
-      // Medium priority - generic total but not subtotal
-      /^TOTAL[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/im,
-      /(?<!SUB)TOTAL[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i,
-      
+      /(?:GRAND\s*TOTAL|AMOUNT\s*DUE|BALANCE\s*DUE|PLEASE\s*PAY|FINAL\s+AMOUNT)[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/i,
+      /TOTAL\s*(?:DUE|AMOUNT|CHARGE)[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/i,
+
+      // Medium priority - generic total but not subtotal (fixed negative lookbehind)
+      /^TOTAL[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/im,
+      /(?:^|\s)TOTAL[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/im,
+
+      // Additional total patterns
+      /SUM[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/i,
+
       // Lower priority - other payment indicators
-      /TO\s*PAY[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i,
-      /CHARGE[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i,
-      /[$€£¥₹₽]\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s*(?:TOTAL|DUE)$/i,
+      /TO\s*PAY[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/i,
+      /CHARGE[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/i,
+      /[$€£¥₹₽]\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})\s*(?:TOTAL|DUE)$/i,
     ]
 
-    // Enhanced amount pattern supporting European formats and more currencies
-    const amountPattern = /[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})|(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})\s*[$€£¥₹₽]/g
+    // Enhanced amount pattern with optional decimals
+    const amountPattern = /[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})|(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})\s*[$€£¥₹₽]/g
 
     // Extract all amounts with context
     lines.forEach((line, index) => {
       // Skip lines that match exclude patterns
       const shouldExclude = excludePatterns.some(pattern => line.match(pattern))
-      
+
       const matches = line.matchAll(amountPattern)
       for (const match of matches) {
         const valueStr = match[1] || match[2]
-        
-        // Handle European decimal format (1.234,56 -> 1234.56)
-        let value: number
-        if (valueStr.includes(',') && valueStr.includes('.')) {
-          // Format like 1.234,56
-          const normalized = valueStr.replace(/\./g, '').replace(',', '.')
-          value = parseFloat(normalized)
-        } else if (valueStr.includes(',') && !valueStr.includes('.')) {
-          // Format like 123,45 - check if it's decimal or thousands separator
-          const parts = valueStr.split(',')
-          if (parts[parts.length - 1].length === 2) {
-            // Last part is 2 digits, treat comma as decimal
-            value = parseFloat(valueStr.replace(',', '.'))
-          } else {
-            // Treat as thousands separator
-            value = parseFloat(valueStr.replace(/,/g, ''))
-          }
-        } else {
-          value = parseFloat(valueStr.replace(/,/g, ''))
-        }
-        
-        if (!isNaN(value) && value > 0 && value < 10000) {
+        const value = parseCurrencyString(valueStr)
+
+        if (value !== null && isValidReceiptAmount(value)) {
           const context = lines.slice(Math.max(0, index - 1), Math.min(lines.length, index + 2)).join(' ')
           // Mark if this amount should be excluded
-          amounts.push({ 
-            value, 
-            context: shouldExclude ? `[EXCLUDED] ${context}` : context 
+          amounts.push({
+            value,
+            context: shouldExclude ? `[EXCLUDED] ${context}` : context
           })
         }
       }
@@ -110,35 +101,18 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
       const match = text.match(pattern)
       if (match) {
         const valueStr = match[1]
-        
-        // Handle European decimal format for pattern matches too
-        let matchedValue: number
-        if (valueStr.includes(',') && valueStr.includes('.')) {
-          // Format like 1.234,56
-          const normalized = valueStr.replace(/\./g, '').replace(',', '.')
-          matchedValue = parseFloat(normalized)
-        } else if (valueStr.includes(',') && !valueStr.includes('.')) {
-          // Format like 123,45 - check if it's decimal or thousands separator
-          const parts = valueStr.split(',')
-          if (parts[parts.length - 1].length === 2) {
-            // Last part is 2 digits, treat comma as decimal
-            matchedValue = parseFloat(valueStr.replace(',', '.'))
-          } else {
-            // Treat as thousands separator
-            matchedValue = parseFloat(valueStr.replace(/,/g, ''))
+        const matchedValue = parseCurrencyString(valueStr)
+
+        if (matchedValue !== null && isValidReceiptAmount(matchedValue)) {
+          // Verify this is likely the total by checking if it's one of the larger amounts
+          const sortedAmounts = [...amounts].sort((a, b) => b.value - a.value)
+          const isAmongLargest = sortedAmounts.slice(0, 3).some(a => Math.abs(a.value - matchedValue) < 0.01)
+
+          if (isAmongLargest) {
+            totalAmount = matchedValue
+            confidence = 0.95 // Very high confidence
+            break
           }
-        } else {
-          matchedValue = parseFloat(valueStr.replace(/,/g, ''))
-        }
-        
-        // Verify this is likely the total by checking if it's one of the larger amounts
-        const sortedAmounts = [...amounts].sort((a, b) => b.value - a.value)
-        const isAmongLargest = sortedAmounts.slice(0, 3).some(a => Math.abs(a.value - matchedValue) < 0.01)
-        
-        if (isAmongLargest) {
-          totalAmount = matchedValue
-          confidence = 0.95 // Very high confidence
-          break
         }
       }
     }
@@ -147,30 +121,48 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
     if (totalAmount === 0 && amounts.length > 0) {
       // Filter out excluded amounts
       const validAmounts = amounts.filter(a => !a.context.includes('[EXCLUDED]'))
-      
+
+      // Convert to ExtractedAmount format for validation
+      const extractedAmounts: ExtractedAmount[] = validAmounts.map((a, i) => ({
+        value: a.value,
+        context: a.context,
+        lineIndex: i
+      }))
+
       if (validAmounts.length > 0) {
         // Sort amounts by value
         const sortedAmounts = [...validAmounts].sort((a, b) => b.value - a.value)
+
+        // Categorize amounts to identify and deprioritize item prices
+        const categorizedAmounts = validAmounts.map(a => categorizeAmount(
+          { value: a.value, context: a.context, lineIndex: 0 },
+          extractedAmounts
+        ))
+
+        // Prioritize total and subtotal categories
+        const prioritizedAmounts = categorizedAmounts
+          .filter(a => a.category === 'total' || a.category === 'subtotal')
+          .sort((a, b) => b.value - a.value)
+
+        // Try contextual relationship validation for each large amount
+        for (const amount of prioritizedAmounts.slice(0, 3)) {
+          const validation = validateTotalRelationship(amount.value, extractedAmounts)
+          if (validation.valid && validation.confidence > 0.8) {
+            totalAmount = amount.value
+            confidence = validation.confidence * 0.9
+            break
+          }
+        }
         
         // Look for tax pattern to help identify total
-        const taxPattern = /(?:TAX|HST|GST|PST|VAT)[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/i
+        const taxPattern = /(?:TAX|HST|GST|PST|VAT)[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/i
         const taxMatch = text.match(taxPattern)
         let taxAmount = 0
         if (taxMatch) {
           const taxStr = taxMatch[1]
-          // Handle European decimal format for tax too
-          if (taxStr.includes(',') && taxStr.includes('.')) {
-            const normalized = taxStr.replace(/\./g, '').replace(',', '.')
-            taxAmount = parseFloat(normalized)
-          } else if (taxStr.includes(',') && !taxStr.includes('.')) {
-            const parts = taxStr.split(',')
-            if (parts[parts.length - 1].length === 2) {
-              taxAmount = parseFloat(taxStr.replace(',', '.'))
-            } else {
-              taxAmount = parseFloat(taxStr.replace(/,/g, ''))
-            }
-          } else {
-            taxAmount = parseFloat(taxStr.replace(/,/g, ''))
+          const parsedTax = parseCurrencyString(taxStr)
+          if (parsedTax !== null) {
+            taxAmount = parsedTax
           }
         }
         
@@ -193,7 +185,25 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
         // If still no total, use position-based heuristics
         if (totalAmount === 0) {
           // Find the largest amount in the bottom 40% of the receipt
-          const bottomAmounts = validAmounts.slice(Math.floor(validAmounts.length * 0.6))
+          const totalLines = lines.length
+
+          // Track actual line positions in the document
+          const amountsWithPosition = validAmounts.map(amount => ({
+            ...amount,
+            // Find which line this amount came from
+            lineIndex: lines.findIndex(line => {
+              const contextStart = Math.max(0, lines.indexOf(line) - 1)
+              const contextEnd = Math.min(lines.length, lines.indexOf(line) + 2)
+              const context = lines.slice(contextStart, contextEnd).join(' ')
+              return context.includes(amount.context) || amount.context.includes(line.trim())
+            })
+          }))
+
+          // Filter amounts that are in the bottom 40% of the receipt
+          const bottomAmounts = amountsWithPosition.filter(
+            a => a.lineIndex >= 0 && (a.lineIndex / totalLines) >= 0.6
+          )
+
           if (bottomAmounts.length > 0) {
             const largestInBottom = bottomAmounts.sort((a, b) => b.value - a.value)[0]
             totalAmount = largestInBottom.value
@@ -366,6 +376,21 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
     }
   }
 
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        const blob = item.getAsFile()
+        if (blob) {
+          processImage(blob)
+        }
+        return
+      }
+    }
+  }, [processImage])
+
   const confirmAmount = (amount: number) => {
     onAmountExtracted(amount)
     onClose()
@@ -385,6 +410,7 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
         exit={{ scale: 0.9, opacity: 0 }}
         className="bg-card rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
+        onPaste={handlePaste}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
@@ -441,6 +467,10 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
                   <span className="font-medium">Upload Image</span>
                 </motion.button>
               </div>
+
+              <p className="text-sm text-muted-foreground text-center">
+                or press ⌘V / Ctrl+V to paste an image
+              </p>
 
               {/* Hidden inputs */}
               <input
