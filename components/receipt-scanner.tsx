@@ -6,11 +6,9 @@ import { Camera, Upload, X, CheckCircle, AlertCircle, Loader2 } from "lucide-rea
 import Tesseract from "tesseract.js"
 import NextImage from "next/image"
 import {
-  parseCurrencyString,
-  isValidReceiptAmount,
+  findAmountsInText,
   validateTotalRelationship,
   categorizeAmount,
-  type ExtractedAmount,
 } from "@/lib/number-utils"
 
 interface ReceiptScannerProps {
@@ -33,200 +31,100 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
   const [progress, setProgress] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
+  const requestIdRef = useRef(0)
 
   // Pattern matching for common receipt formats
   const extractAmounts = useCallback((text: string): ExtractedData => {
     const lines = text.split('\n')
-    const amounts: Array<{ value: number; context: string }> = []
-    
-    // Patterns that indicate NOT the final total
-    const excludePatterns = [
-      /SUB\s*TOTAL/i,
-      /SUBTOTAL/i,
-      /SUB-TOTAL/i,
-      /BEFORE\s*TAX/i,
-      /FOOD\s*TOTAL/i,
-      /MERCHANDISE/i,
-      /ITEMS?\s*TOTAL/i,
-    ]
-    
-    // Common patterns for total amounts (ordered by priority)
-    const totalPatterns = [
-      // Highest priority - very specific total patterns
-      /(?:GRAND\s*TOTAL|AMOUNT\s*DUE|BALANCE\s*DUE|PLEASE\s*PAY|FINAL\s+AMOUNT)[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/i,
-      /TOTAL\s*(?:DUE|AMOUNT|CHARGE)[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/i,
+    const extractedAmounts = findAmountsInText(text)
 
-      // Medium priority - generic total but not subtotal (fixed negative lookbehind)
-      /^TOTAL[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/im,
-      /(?:^|\s)TOTAL[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/im,
+    if (extractedAmounts.length === 0) {
+      return {
+        amount: 0,
+        confidence: 0,
+        allAmounts: [],
+        rawText: text,
+      }
+    }
 
-      // Additional total patterns
-      /SUM[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/i,
+    const maxValue = Math.max(...extractedAmounts.map((a) => a.value))
+    const sortedByValue = [...extractedAmounts].sort((a, b) => b.value - a.value)
+    const hasRelationshipAnchors = extractedAmounts.some((a) =>
+      /SUB\s*TOTAL|SUBTOTAL|SUB-TOTAL|BEFORE\s*TAX|TAX|HST|GST|PST|VAT|TIP|GRATUITY|SERVICE/i.test(a.context)
+    )
 
-      // Lower priority - other payment indicators
-      /TO\s*PAY[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/i,
-      /CHARGE[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/i,
-      /[$€£¥₹₽]\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})\s*(?:TOTAL|DUE)$/i,
-    ]
+    const scoredAmounts = extractedAmounts.map((amount) => {
+      const context = amount.context.toUpperCase()
+      const relativeLinePosition = lines.length > 1 ? amount.lineIndex / (lines.length - 1) : 1
+      const inTopThreeValues = sortedByValue
+        .slice(0, 3)
+        .some((a) => Math.abs(a.value - amount.value) < 0.01)
 
-    // Enhanced amount pattern with optional decimals
-    const amountPattern = /[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})|(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})\s*[$€£¥₹₽]/g
+      const hasStrongTotalSignal = /\b(GRAND\s*TOTAL|AMOUNT\s*DUE|BALANCE\s*DUE|FINAL\s*AMOUNT|TOTAL\s*DUE|TOTAL\s*AMOUNT|TO\s*PAY)\b/i.test(context)
+      const hasWeakTotalSignal = /\b(TOTAL|SUM|AMOUNT|DUE|BAL)\b/i.test(context)
+      const hasMisleadingTotalSignal = /\b(ITEMS?\s*TOTAL|TOTAL\s*SAVINGS?|SAVINGS?\s*TOTAL|DISCOUNT|MERCHANDISE|FOOD\s*TOTAL)\b/i.test(context)
+      const hasPaymentSignal = /\b(CASH|CHANGE|TENDERED|PAID|APPROVAL|AUTH|CARD|VISA|MASTERCARD|AMEX)\b/i.test(context)
 
-    // Extract all amounts with context
-    lines.forEach((line, index) => {
-      // Skip lines that match exclude patterns
-      const shouldExclude = excludePatterns.some(pattern => line.match(pattern))
+      const category = categorizeAmount(amount, extractedAmounts)
+      const validation = validateTotalRelationship(amount.value, extractedAmounts)
 
-      const matches = line.matchAll(amountPattern)
-      for (const match of matches) {
-        const valueStr = match[1] || match[2]
-        const value = parseCurrencyString(valueStr)
+      let score = 0
+      if (hasStrongTotalSignal) score += 4.2
+      if (hasWeakTotalSignal) score += 1.8
+      if (hasMisleadingTotalSignal) score -= 2.2
+      if (hasPaymentSignal || category.category === 'payment') score -= 2.8
 
-        if (value !== null && isValidReceiptAmount(value)) {
-          const context = lines.slice(Math.max(0, index - 1), Math.min(lines.length, index + 2)).join(' ')
-          // Mark if this amount should be excluded
-          amounts.push({
-            value,
-            context: shouldExclude ? `[EXCLUDED] ${context}` : context
-          })
-        }
+      if (category.category === 'total') score += 1.4
+      if (category.category === 'subtotal') score += 0.4
+      if (category.category === 'tax' || category.category === 'tip') score -= 0.8
+      if (category.category === 'item') score -= 0.4
+
+      if (validation.valid) {
+        score += 2.4 * validation.confidence
+      } else if (hasRelationshipAnchors) {
+        score -= 0.6
+      }
+
+      score += Math.min(1.2, amount.value / maxValue)
+      if (inTopThreeValues) score += 0.5
+      score += relativeLinePosition * 1.6
+      if (amount.value < 1) score -= 1
+
+      return {
+        ...amount,
+        score,
+        validation,
       }
     })
 
-    // Try to find total using patterns
-    let totalAmount = 0
-    let confidence = 0
+    scoredAmounts.sort((a, b) => b.score - a.score || b.lineIndex - a.lineIndex)
 
-    for (const pattern of totalPatterns) {
-      const match = text.match(pattern)
-      if (match) {
-        const valueStr = match[1]
-        const matchedValue = parseCurrencyString(valueStr)
-
-        if (matchedValue !== null && isValidReceiptAmount(matchedValue)) {
-          // Verify this is likely the total by checking if it's one of the larger amounts
-          const sortedAmounts = [...amounts].sort((a, b) => b.value - a.value)
-          const isAmongLargest = sortedAmounts.slice(0, 3).some(a => Math.abs(a.value - matchedValue) < 0.01)
-
-          if (isAmongLargest) {
-            totalAmount = matchedValue
-            confidence = 0.95 // Very high confidence
-            break
-          }
-        }
+    const best = scoredAmounts[0]
+    if (!best || best.score < 1.2) {
+      const fallbackConfidence = best ? Math.max(0.1, Math.min(0.35, best.score / 4)) : 0
+      return {
+        amount: 0,
+        confidence: fallbackConfidence,
+        allAmounts: extractedAmounts,
+        rawText: text,
       }
     }
 
-    // If no pattern matched, use advanced heuristics
-    if (totalAmount === 0 && amounts.length > 0) {
-      // Filter out excluded amounts
-      const validAmounts = amounts.filter(a => !a.context.includes('[EXCLUDED]'))
+    const secondBest = scoredAmounts[1]
+    const scoreMargin = secondBest ? best.score - secondBest.score : best.score
+    const baseConfidence = Math.min(0.98, Math.max(0.2, best.score / 8))
+    const marginFactor = Math.min(1, Math.max(0.45, scoreMargin / 3))
+    let confidence = baseConfidence * marginFactor
 
-      // Convert to ExtractedAmount format for validation
-      const extractedAmounts: ExtractedAmount[] = validAmounts.map((a, i) => ({
-        value: a.value,
-        context: a.context,
-        lineIndex: i
-      }))
-
-      if (validAmounts.length > 0) {
-        // Sort amounts by value
-        const sortedAmounts = [...validAmounts].sort((a, b) => b.value - a.value)
-
-        // Categorize amounts to identify and deprioritize item prices
-        const categorizedAmounts = validAmounts.map(a => categorizeAmount(
-          { value: a.value, context: a.context, lineIndex: 0 },
-          extractedAmounts
-        ))
-
-        // Prioritize total and subtotal categories
-        const prioritizedAmounts = categorizedAmounts
-          .filter(a => a.category === 'total' || a.category === 'subtotal')
-          .sort((a, b) => b.value - a.value)
-
-        // Try contextual relationship validation for each large amount
-        for (const amount of prioritizedAmounts.slice(0, 3)) {
-          const validation = validateTotalRelationship(amount.value, extractedAmounts)
-          if (validation.valid && validation.confidence > 0.8) {
-            totalAmount = amount.value
-            confidence = validation.confidence * 0.9
-            break
-          }
-        }
-        
-        // Look for tax pattern to help identify total
-        const taxPattern = /(?:TAX|HST|GST|PST|VAT)[:\s]+[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})/i
-        const taxMatch = text.match(taxPattern)
-        let taxAmount = 0
-        if (taxMatch) {
-          const taxStr = taxMatch[1]
-          const parsedTax = parseCurrencyString(taxStr)
-          if (parsedTax !== null) {
-            taxAmount = parsedTax
-          }
-        }
-        
-        // If we found tax, look for an amount that's larger than subtotal + tax
-        if (taxAmount > 0) {
-          const possibleTotal = sortedAmounts.find(a => {
-            // Check if this could be subtotal + tax (within 10 cents tolerance)
-            const subtotalCandidates = sortedAmounts.filter(s => s.value < a.value)
-            return subtotalCandidates.some(sub => 
-              Math.abs((sub.value + taxAmount) - a.value) < 0.10
-            )
-          })
-          
-          if (possibleTotal) {
-            totalAmount = possibleTotal.value
-            confidence = 0.85
-          }
-        }
-        
-        // If still no total, use position-based heuristics
-        if (totalAmount === 0) {
-          // Find the largest amount in the bottom 40% of the receipt
-          const totalLines = lines.length
-
-          // Track actual line positions in the document
-          const amountsWithPosition = validAmounts.map(amount => ({
-            ...amount,
-            // Find which line this amount came from
-            lineIndex: lines.findIndex(line => {
-              const contextStart = Math.max(0, lines.indexOf(line) - 1)
-              const contextEnd = Math.min(lines.length, lines.indexOf(line) + 2)
-              const context = lines.slice(contextStart, contextEnd).join(' ')
-              return context.includes(amount.context) || amount.context.includes(line.trim())
-            })
-          }))
-
-          // Filter amounts that are in the bottom 40% of the receipt
-          const bottomAmounts = amountsWithPosition.filter(
-            a => a.lineIndex >= 0 && (a.lineIndex / totalLines) >= 0.6
-          )
-
-          if (bottomAmounts.length > 0) {
-            const largestInBottom = bottomAmounts.sort((a, b) => b.value - a.value)[0]
-            totalAmount = largestInBottom.value
-            confidence = 0.7
-          } else {
-            // Last resort: largest valid amount
-            totalAmount = sortedAmounts[0].value
-            confidence = 0.5
-          }
-        }
-      } else {
-        // All amounts were excluded, use largest anyway with low confidence
-        const sortedAll = [...amounts].sort((a, b) => b.value - a.value)
-        totalAmount = sortedAll[0]?.value || 0
-        confidence = 0.3
-      }
+    if (best.validation.valid) {
+      confidence = Math.min(0.98, confidence + 0.1)
     }
 
     return {
-      amount: totalAmount,
+      amount: best.value,
       confidence,
-      allAmounts: amounts.filter(a => !a.context.includes('[EXCLUDED]')),
-      rawText: text
+      allAmounts: extractedAmounts,
+      rawText: text,
     }
   }, [])
 
@@ -290,12 +188,12 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
   }, [])
 
   // Helper function to try OCR with different processing modes
-  const tryOCR = useCallback(async (img: HTMLImageElement, mode: 'normal' | 'high-contrast' | 'low-contrast'): Promise<ExtractedData> => {
+  const tryOCR = useCallback(async (img: HTMLImageElement, mode: 'normal' | 'high-contrast' | 'low-contrast', requestId: number): Promise<ExtractedData> => {
     const processedUrl = preprocessImage(img, mode)
     
     const result = await Tesseract.recognize(processedUrl, 'eng', {
       logger: (m) => {
-        if (m.status === 'recognizing text') {
+        if (m.status === 'recognizing text' && requestId === requestIdRef.current) {
           setProgress(Math.round(m.progress * 100))
         }
       },
@@ -305,6 +203,9 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
   }, [preprocessImage, extractAmounts])
 
   const processImage = useCallback(async (file: File) => {
+    const requestId = ++requestIdRef.current
+    let imageUrl: string | null = null
+
     setIsProcessing(true)
     setError(null)
     setProgress(0)
@@ -313,37 +214,61 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
       // Create image preview
       const reader = new FileReader()
       reader.onload = (e) => {
-        setImagePreview(e.target?.result as string)
+        if (requestId === requestIdRef.current) {
+          setImagePreview(e.target?.result as string)
+        }
       }
       reader.readAsDataURL(file)
 
       // Load image
       const img = new Image()
-      const imageUrl = URL.createObjectURL(file)
+      const localImageUrl = URL.createObjectURL(file)
+      imageUrl = localImageUrl
       
       await new Promise((resolve, reject) => {
         img.onload = resolve
         img.onerror = reject
-        img.src = imageUrl
+        img.src = localImageUrl
       })
 
-      // Try normal processing first
-      let result = await tryOCR(img, 'normal')
-      
-      if (result.confidence < 0.3 && result.amount === 0) {
-        setProgress(50) // Show we're trying again
-        
-        // Try with higher contrast for dark images
-        result = await tryOCR(img, 'high-contrast')
-        
-        if (result.confidence < 0.3 && result.amount === 0) {
-          setProgress(75)
-          // Try with lower contrast for bright images  
-          result = await tryOCR(img, 'low-contrast')
+      const qualityScore = (data: ExtractedData): number => {
+        const amountFoundScore = data.amount > 0 ? 1.5 : 0
+        const optionsScore = Math.min(0.25, data.allAmounts.length * 0.03)
+        return amountFoundScore + data.confidence + optionsScore
+      }
+
+      const results: ExtractedData[] = []
+
+      const normalResult = await tryOCR(img, 'normal', requestId)
+      results.push(normalResult)
+
+      const shouldTryHighContrast = normalResult.amount === 0 || normalResult.confidence < 0.75
+      if (shouldTryHighContrast) {
+        if (requestId === requestIdRef.current) {
+          setProgress((prev) => Math.max(prev, 50))
         }
+        const highContrastResult = await tryOCR(img, 'high-contrast', requestId)
+        results.push(highContrastResult)
+      }
+
+      const bestSoFar = [...results].sort((a, b) => qualityScore(b) - qualityScore(a))[0]
+      const shouldTryLowContrast = !bestSoFar || bestSoFar.amount === 0 || bestSoFar.confidence < 0.75
+      if (shouldTryLowContrast) {
+        if (requestId === requestIdRef.current) {
+          setProgress((prev) => Math.max(prev, 75))
+        }
+        const lowContrastResult = await tryOCR(img, 'low-contrast', requestId)
+        results.push(lowContrastResult)
+      }
+
+      const result = [...results].sort((a, b) => qualityScore(b) - qualityScore(a))[0]
+
+      if (!result || requestId !== requestIdRef.current) {
+        return
       }
 
       setExtractedData(result)
+      setProgress(100)
 
       // Set better error messages if no amount found
       if (result.amount === 0) {
@@ -358,14 +283,19 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
           setError(`Found ${allAmounts.length} amounts. Click one below or try a clearer image.`)
         }
       }
-
-      // Clean up
-      URL.revokeObjectURL(imageUrl)
     } catch (err) {
       console.error('OCR Error:', err)
-      setError('Could not process image. Try a different photo.')
+      if (requestId === requestIdRef.current) {
+        setError('Could not process image. Try a different photo.')
+      }
     } finally {
-      setIsProcessing(false)
+      if (imageUrl) {
+        URL.revokeObjectURL(imageUrl)
+      }
+
+      if (requestId === requestIdRef.current) {
+        setIsProcessing(false)
+      }
     }
   }, [tryOCR])
 

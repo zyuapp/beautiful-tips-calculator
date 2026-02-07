@@ -1,5 +1,7 @@
 type NumberFormat = 'european' | 'us' | 'mixed'
 
+const RECEIPT_AMOUNT_PATTERN = /(?:[$€£¥₹₽]\s*)?(\d{1,3}(?:[.,'’\s]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?:\s*[$€£¥₹₽])?/g
+
 export interface ExtractedAmount {
   value: number
   context: string
@@ -7,65 +9,88 @@ export interface ExtractedAmount {
 }
 
 export interface CategorizedAmount extends ExtractedAmount {
-  category: 'total' | 'subtotal' | 'tax' | 'tip' | 'item' | 'unknown'
+  category: 'total' | 'subtotal' | 'tax' | 'tip' | 'item' | 'payment' | 'unknown'
 }
 
-export function parseCurrencyString(valueStr: string): number | null {
+export function parseCurrencyString(valueStr: string, formatHint: NumberFormat = 'mixed'): number | null {
   if (!valueStr || typeof valueStr !== 'string') {
     return null
   }
 
-  const cleaned = valueStr.trim()
-  if (!cleaned) {
+  const cleaned = valueStr
+    .replace(/[^\d.,'’\s-]/g, '')
+    .replace(/[\u00A0\u202F]/g, ' ')
+    .replace(/[’']/g, "'")
+    .trim()
+
+  if (!cleaned || !/\d/.test(cleaned)) {
     return null
   }
 
-  const hasComma = cleaned.includes(',')
-  const hasDot = cleaned.includes('.')
+  let normalized = cleaned.replace(/\s+/g, '').replace(/'/g, '')
+  normalized = normalized.replace(/(?!^)-/g, '')
 
-  let value: number
-  let normalized: string
+  const hasComma = normalized.includes(',')
+  const hasDot = normalized.includes('.')
 
-  if (hasComma && hasDot) {
-    const lastCommaIndex = cleaned.lastIndexOf(',')
-    const lastDotIndex = cleaned.lastIndexOf('.')
-
-    if (lastDotIndex > lastCommaIndex) {
-      normalized = cleaned.replace(/,/g, '')
-    } else {
-      normalized = cleaned.replace(/\./g, '').replace(',', '.')
+  const chooseDecimalSeparator = (): ',' | '.' | null => {
+    if (hasComma && hasDot) {
+      return normalized.lastIndexOf(',') > normalized.lastIndexOf('.') ? ',' : '.'
     }
-    value = parseFloat(normalized)
-  } else if (hasComma && !hasDot) {
-    const parts = cleaned.split(',')
-    const lastPart = parts[parts.length - 1]
 
-    if (lastPart.length <= 2 && parts.length > 1) {
-      normalized = cleaned.replace(',', '.')
-    } else {
-      normalized = cleaned.replace(/,/g, '')
+    const separator = hasComma ? ',' : hasDot ? '.' : null
+    if (!separator) {
+      return null
     }
-    value = parseFloat(normalized)
-  } else if (!hasComma && hasDot) {
-    const parts = cleaned.split('.')
-    const lastPart = parts[parts.length - 1]
 
-    if (parts.length > 1 && lastPart.length <= 3) {
-      normalized = cleaned
-    } else {
-      normalized = cleaned.replace(/\./g, '')
+    const parts = normalized.split(separator)
+    const lastPart = parts[parts.length - 1] || ''
+    const isSingleSeparator = parts.length === 2
+
+    if (lastPart.length <= 2) {
+      return separator
     }
-    value = parseFloat(normalized)
-  } else {
-    value = parseFloat(cleaned)
+
+    if (lastPart.length === 3 && !isSingleSeparator) {
+      return null
+    }
+
+    if (lastPart.length === 3 && isSingleSeparator) {
+      if (formatHint === 'european') {
+        return null
+      }
+
+      return null
+    }
+
+    return null
   }
 
-  return isNaN(value) ? null : value
+  const decimalSeparator = chooseDecimalSeparator()
+  if (decimalSeparator) {
+    const parts = normalized.split(decimalSeparator)
+    const fractionPart = parts.pop() || ''
+    const integerPart = parts.join('').replace(/[.,]/g, '')
+
+    if (!integerPart || !/^\d+$/.test(integerPart) || !/^\d+$/.test(fractionPart)) {
+      return null
+    }
+
+    const value = Number.parseFloat(`${integerPart}.${fractionPart}`)
+    return Number.isFinite(value) ? value : null
+  }
+
+  const integerLike = normalized.replace(/[.,]/g, '')
+  if (!/^[-]?\d+$/.test(integerLike)) {
+    return null
+  }
+
+  const value = Number.parseFloat(integerLike)
+  return Number.isFinite(value) ? value : null
 }
 
 export function detectNumberFormat(text: string): NumberFormat {
-  const amountPattern = /\b\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})?\b/g
-  const matches = text.match(amountPattern)
+  const matches = text.match(/\b\d{1,3}(?:[.,'’\s]\d{3})*(?:[.,]\d{1,2})?\b/g)
 
   if (!matches || matches.length < 3) {
     return 'us'
@@ -74,61 +99,73 @@ export function detectNumberFormat(text: string): NumberFormat {
   let europeanCount = 0
   let usCount = 0
 
-  for (const match of matches) {
+  for (const raw of matches) {
+    const match = raw.replace(/[\s'’]/g, '')
+
     if (match.includes(',') && match.includes('.')) {
-      const lastCommaIndex = match.lastIndexOf(',')
-      const lastDotIndex = match.lastIndexOf('.')
-      if (lastDotIndex > lastCommaIndex) {
-        usCount++
-      } else {
+      if (match.lastIndexOf(',') > match.lastIndexOf('.')) {
         europeanCount++
+      } else {
+        usCount++
       }
-    } else if (match.includes(',') && !match.includes('.')) {
+      continue
+    }
+
+    if (match.includes(',') && !match.includes('.')) {
       const parts = match.split(',')
-      const lastPart = parts[parts.length - 1]
-      if (lastPart.length === 2) {
+      const lastPart = parts[parts.length - 1] || ''
+      if (lastPart.length <= 2) {
         europeanCount++
       } else {
         usCount++
       }
-    } else if (!match.includes(',') && match.includes('.')) {
-      usCount++
+      continue
+    }
+
+    if (!match.includes(',') && match.includes('.')) {
+      const parts = match.split('.')
+      const lastPart = parts[parts.length - 1] || ''
+      if (lastPart.length <= 2) {
+        usCount++
+      } else {
+        europeanCount++
+      }
     }
   }
 
   if (europeanCount > usCount * 1.5) {
     return 'european'
-  } else if (usCount > europeanCount * 1.5) {
+  }
+
+  if (usCount > europeanCount * 1.5) {
     return 'us'
   }
+
   return 'mixed'
 }
 
 export function findAmountsInText(text: string): ExtractedAmount[] {
   const lines = text.split('\n')
   const amounts: ExtractedAmount[] = []
+  const formatHint = detectNumberFormat(text)
 
-  const amountPattern = /[$€£¥₹₽]?\s*(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})|(\d{1,3}(?:[.,]\d{3})*[.,]?\d{0,2})\s*[$€£¥₹₽]/g
+  for (const [index, line] of lines.entries()) {
+    const lineText = line.replace(/\s+/g, ' ').trim()
+    const matches = line.matchAll(RECEIPT_AMOUNT_PATTERN)
 
-  lines.forEach((line, index) => {
-    const matches = line.matchAll(amountPattern)
     for (const match of matches) {
-      const valueStr = match[1] || match[2]
-      const value = parseCurrencyString(valueStr)
+      const valueStr = match[1]
+      const value = parseCurrencyString(valueStr, formatHint)
 
       if (value !== null && isValidReceiptAmount(value)) {
-        const contextStart = Math.max(0, index - 1)
-        const contextEnd = Math.min(lines.length, index + 2)
-        const context = lines.slice(contextStart, contextEnd).join(' ')
-
         amounts.push({
           value,
-          context,
-          lineIndex: index
+          context: lineText,
+          lineIndex: index,
         })
       }
     }
-  })
+  }
 
   return amounts
 }
@@ -136,8 +173,8 @@ export function findAmountsInText(text: string): ExtractedAmount[] {
 export function isValidReceiptAmount(value: number): boolean {
   return (
     typeof value === 'number' &&
-    !isNaN(value) &&
-    isFinite(value) &&
+    !Number.isNaN(value) &&
+    Number.isFinite(value) &&
     value > 0 &&
     value < 100000
   )
@@ -147,35 +184,66 @@ export function validateTotalRelationship(
   total: number,
   allAmounts: ExtractedAmount[]
 ): { valid: boolean; confidence: number } {
-  const tolerance = 0.05
+  const subtotalCandidates = allAmounts
+    .filter((a) => /SUB\s*TOTAL|SUBTOTAL|SUB-TOTAL|BEFORE\s*TAX/i.test(a.context))
+    .sort((a, b) => b.lineIndex - a.lineIndex)
+    .slice(0, 5)
 
-  const subtotal = allAmounts.find(a =>
-    /SUB\s*TOTAL|SUBTOTAL|SUB-TOTAL/i.test(a.context)
-  )?.value ?? 0
+  const taxCandidates = allAmounts
+    .filter((a) => /(?:TAX|HST|GST|PST|VAT)\b/i.test(a.context))
+    .sort((a, b) => b.lineIndex - a.lineIndex)
+    .slice(0, 5)
 
-  const tax = allAmounts.find(a =>
-    /(?:TAX|HST|GST|PST|VAT)[:\s]+/i.test(a.context)
-  )?.value ?? 0
+  const tipCandidates = allAmounts
+    .filter((a) => /(?:TIP|GRATUITY|SERVICE)\b/i.test(a.context))
+    .sort((a, b) => b.lineIndex - a.lineIndex)
+    .slice(0, 5)
 
-  const tip = allAmounts.find(a =>
-    /(?:TIP|GRATUITY|SERVICE)[:\s]+/i.test(a.context)
-  )?.value ?? 0
+  if (subtotalCandidates.length === 0) {
+    return { valid: false, confidence: 0 }
+  }
 
-  if (subtotal > 0) {
-    const expectedTotal = subtotal + tax + tip
-    const diff = Math.abs(total - expectedTotal)
+  let bestRatio = Number.POSITIVE_INFINITY
+  let hasExactishMatch = false
 
-    if (diff <= expectedTotal * tolerance) {
-      return { valid: true, confidence: 0.95 }
+  const taxOptions = [0, ...taxCandidates.map((c) => c.value)]
+  const tipOptions = [0, ...tipCandidates.map((c) => c.value)]
+
+  for (const subtotal of subtotalCandidates) {
+    for (const tax of taxOptions) {
+      for (const tip of tipOptions) {
+        const expectedTotal = subtotal.value + tax + tip
+        if (expectedTotal <= 0) {
+          continue
+        }
+
+        const ratio = Math.abs(total - expectedTotal) / expectedTotal
+        if (ratio < bestRatio) {
+          bestRatio = ratio
+        }
+
+        if (ratio <= 0.02) {
+          hasExactishMatch = true
+        }
+      }
     }
+  }
 
-    if (diff <= expectedTotal * 0.10) {
-      return { valid: true, confidence: 0.85 }
-    }
+  if (bestRatio <= 0.02) {
+    return { valid: true, confidence: 0.96 }
+  }
 
-    if (total > subtotal && total <= subtotal * 1.25) {
-      return { valid: true, confidence: 0.7 }
-    }
+  if (bestRatio <= 0.05) {
+    return { valid: true, confidence: 0.9 }
+  }
+
+  if (bestRatio <= 0.1) {
+    return { valid: true, confidence: 0.8 }
+  }
+
+  const latestSubtotal = subtotalCandidates[0].value
+  if (!hasExactishMatch && total >= latestSubtotal * 0.95 && total <= latestSubtotal * 1.35) {
+    return { valid: true, confidence: 0.65 }
   }
 
   return { valid: false, confidence: 0 }
@@ -185,11 +253,19 @@ export function categorizeAmount(amount: ExtractedAmount, allAmounts: ExtractedA
   const context = amount.context.toUpperCase()
   const value = amount.value
 
-  if (/(?:GRAND\s*TOTAL|TOTAL\s*DUE|AMOUNT\s*DUE|BALANCE\s*DUE|PLEASE\s*PAY|FINAL\s+AMOUNT)/i.test(context)) {
+  const isPaymentLine = /\b(CASH|CHANGE|TENDERED|PAID|APPROVAL|AUTH|CARD|VISA|MASTERCARD|AMEX)\b/i.test(context)
+  if (isPaymentLine) {
+    return { ...amount, category: 'payment' }
+  }
+
+  if (/(?:GRAND\s*TOTAL|TOTAL\s*DUE|AMOUNT\s*DUE|BALANCE\s*DUE|PLEASE\s*PAY|FINAL\s+AMOUNT|TO\s*PAY)/i.test(context)) {
     return { ...amount, category: 'total' }
   }
 
-  if (/(?:^|\s)TOTAL[:\s]/im.test(context) && !/(?:SUB|FOOD|MERCHANDISE|ITEMS?)\s*TOTAL/i.test(context)) {
+  if (
+    /(?:^|\s)TOTAL[:\s]/im.test(context) &&
+    !/(?:SUB|ITEM|SAVINGS?|DISCOUNT|MERCHANDISE|FOOD|ITEMS?)\s*TOTAL/i.test(context)
+  ) {
     return { ...amount, category: 'total' }
   }
 
@@ -205,14 +281,14 @@ export function categorizeAmount(amount: ExtractedAmount, allAmounts: ExtractedA
     return { ...amount, category: 'tip' }
   }
 
-  const maxValue = Math.max(...allAmounts.map(a => a.value))
+  const maxValue = Math.max(...allAmounts.map((a) => a.value), value)
   const sortedAmounts = [...allAmounts].sort((a, b) => b.value - a.value)
 
   const isLargeValue = value >= maxValue * 0.9
-  const isAmongLargest = sortedAmounts.slice(0, 3).some(a => Math.abs(a.value - value) < 0.01)
+  const isAmongLargest = sortedAmounts.slice(0, 3).some((a) => Math.abs(a.value - value) < 0.01)
 
   if (isLargeValue || isAmongLargest) {
-    return { ...amount, category: 'total' }
+    return { ...amount, category: 'unknown' }
   }
 
   return { ...amount, category: 'item' }
