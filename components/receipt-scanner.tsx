@@ -36,13 +36,13 @@ const AmountChoices = ({
 
   return (
     <div className="mt-4">
-      <p className="text-sm font-medium text-muted-foreground mb-2">{title}</p>
+      <p className="mb-2 text-sm font-semibold text-muted-foreground">{title}</p>
       <div className="grid grid-cols-4 gap-2">
         {amounts.map((amount, index) => (
           <button
             key={`${amount.value}-${amount.lineIndex}-${index}`}
             onClick={() => onAmountSelect(amount.value)}
-            className="p-2 text-sm rounded-lg bg-secondary hover:bg-secondary/80 transition-colors text-center"
+            className="rounded-md border border-border bg-background p-2 text-center text-sm font-semibold font-mono tabular-nums transition-colors hover:bg-secondary"
             title={amount.context}
           >
             ${amount.value.toFixed(2)}
@@ -51,7 +51,7 @@ const AmountChoices = ({
       </div>
       <button
         onClick={onManualEntry}
-        className="w-full mt-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        className="mt-2 w-full rounded-md border border-border bg-secondary py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
       >
         Enter amount manually
       </button>
@@ -210,35 +210,35 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-card rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden"
+        className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-lg border border-border bg-card shadow-xl"
         onClick={(event) => event.stopPropagation()}
         onPaste={handlePaste}
       >
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-2xl font-bold">Scan Receipt</h2>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-accent transition-colors">
+          <h2 className="text-xl font-semibold tracking-tight">Scan Receipt</h2>
+          <button onClick={onClose} className="rounded-md border border-border p-2 transition-colors hover:bg-secondary">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+        <div className="max-h-[calc(90vh-80px)] space-y-6 overflow-y-auto p-5 sm:p-6">
           {!imagePreview && !isProcessing && (
             <div className="space-y-4">
               <p className="text-muted-foreground text-center">
                 Take a photo or upload an image of your receipt
               </p>
 
-              <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3">
+              <div className="rounded-md border border-border bg-secondary p-3">
                 <div className="flex items-start gap-2">
                   <svg
-                    className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0"
+                    className="mt-0.5 h-5 w-5 flex-shrink-0 text-foreground"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -250,9 +250,9 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
                       d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
                     />
                   </svg>
-                  <div className="text-sm text-green-700 dark:text-green-300">
+                  <div className="text-sm text-foreground">
                     <p className="font-medium">100% Private & Secure</p>
-                    <p className="text-xs mt-1 opacity-90">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       All processing happens in your browser. No images are uploaded to any server.
                     </p>
                   </div>
@@ -261,23 +261,19 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
 
               <div className="grid grid-cols-2 gap-4">
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
                   onClick={() => cameraInputRef.current?.click()}
-                  className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-dashed hover:border-primary hover:bg-accent/50 transition-all"
+                  className="flex flex-col items-center gap-3 rounded-md border border-border bg-background p-6 transition-colors hover:bg-secondary"
                 >
-                  <Camera className="h-10 w-10 text-primary" />
-                  <span className="font-medium">Take Photo</span>
+                  <Camera className="h-10 w-10 text-foreground" />
+                  <span className="font-semibold">Take Photo</span>
                 </motion.button>
 
                 <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex flex-col items-center gap-3 p-6 rounded-xl border-2 border-dashed hover:border-primary hover:bg-accent/50 transition-all"
+                  className="flex flex-col items-center gap-3 rounded-md border border-border bg-background p-6 transition-colors hover:bg-secondary"
                 >
-                  <Upload className="h-10 w-10 text-primary" />
-                  <span className="font-medium">Upload Image</span>
+                  <Upload className="h-10 w-10 text-foreground" />
+                  <span className="font-semibold">Upload Image</span>
                 </motion.button>
               </div>
 
@@ -306,14 +302,14 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
           {isProcessing && (
             <div className="space-y-4">
               <div className="flex flex-col items-center gap-4">
-                <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                <p className="text-lg font-medium">Processing receipt...</p>
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                <p className="text-lg font-semibold">Processing receipt...</p>
                 <div className="w-full max-w-xs">
                   <div className="flex justify-between text-sm text-muted-foreground mb-1">
                     <span>Extracting text</span>
                     <span>{progress}%</span>
                   </div>
-                  <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                  <div className="h-2 overflow-hidden rounded-full bg-secondary">
                     <motion.div
                       className="h-full bg-primary"
                       initial={{ width: 0 }}
@@ -329,7 +325,7 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
                     src={imagePreview}
                     alt="Receipt preview"
                     fill
-                    className="object-contain rounded-lg opacity-50"
+                    className="rounded-md border border-border object-contain opacity-50"
                   />
                 </div>
               )}
@@ -361,18 +357,16 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
 
                 {extractedData.amount > 0 ? (
                   <div className="space-y-4">
-                    <div className="bg-primary/10 rounded-lg p-4">
+                    <div className="rounded-md border border-border bg-secondary p-4">
                       <p className="text-sm text-muted-foreground mb-1">
                         Detected Total ({Math.round(extractedData.confidence * 100)}% confidence)
                       </p>
-                      <p className="text-3xl font-bold">${extractedData.amount.toFixed(2)}</p>
+                      <p className="font-mono text-3xl font-semibold tabular-nums">${extractedData.amount.toFixed(2)}</p>
                     </div>
 
                     <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
                       onClick={() => confirmAmount(extractedData.amount)}
-                      className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+                      className="w-full rounded-md border border-primary bg-primary py-3 font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
                     >
                       Use This Amount
                     </motion.button>
@@ -397,7 +391,7 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
 
                 <button
                   onClick={resetScanState}
-                  className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  className="w-full rounded-md border border-border bg-background py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
                 >
                   Try Another Image
                 </button>
@@ -419,7 +413,10 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
                 />
               )}
 
-              <button onClick={resetScanState} className="text-sm underline">
+              <button
+                onClick={resetScanState}
+                className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+              >
                 Try Again
               </button>
             </div>

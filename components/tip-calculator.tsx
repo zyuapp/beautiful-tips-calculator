@@ -77,21 +77,21 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted transition-colors duration-300">
-      <div className="container mx-auto px-4 py-8 max-w-2xl">
+    <div className="min-h-screen bg-background transition-colors duration-200">
+      <div className="container mx-auto max-w-3xl px-4 py-6 sm:py-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.25 }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
+          <div className="mb-6 flex items-center justify-between border-b border-border pb-4">
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
               Tip Calculator
             </h1>
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className="p-2 rounded-lg hover:bg-accent transition-colors"
+              className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background transition-colors hover:bg-secondary"
               aria-label="Toggle dark mode"
             >
               {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
@@ -100,14 +100,14 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
 
           {/* Main Calculator Card */}
           <motion.div
-            className="bg-card rounded-2xl shadow-xl p-6 space-y-6"
+            className="space-y-6 rounded-lg border border-border bg-card p-5 shadow-sm sm:p-6"
             initial={{ scale: 0.95 }}
             animate={{ scale: 1 }}
-            transition={{ duration: 0.3 }}
+            transition={{ duration: 0.2 }}
           >
             {/* Bill Amount Input */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Bill Amount</label>
+              <label className="text-sm font-semibold">Bill Amount</label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <input
@@ -115,11 +115,11 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                   value={billAmount}
                   onChange={(e) => setBillAmount(e.target.value)}
                   placeholder="0.00"
-                  className="w-full pl-10 pr-12 py-3 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className="w-full rounded-md border border-input bg-background py-2.5 pl-10 pr-12 text-base font-medium tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 <button
                   onClick={() => setShowScanner(true)}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-md hover:bg-accent active:bg-accent/70 transition-colors flex items-center justify-center touch-manipulation"
+                  className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-md border border-transparent p-2 transition-colors hover:border-border hover:bg-secondary active:bg-accent touch-manipulation"
                   title="Scan receipt"
                   type="button"
                 >
@@ -130,22 +130,20 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
 
             {/* Tip Percentage */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Tip %</label>
+              <label className="text-sm font-semibold">Tip %</label>
               <div className="grid grid-cols-5 gap-2 mb-3">
                 {tipPresets.map((preset) => (
                   <motion.button
                     key={preset}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
                     onClick={() => {
                       setTipPercent(preset)
                       setCustomTip("")
                     }}
                     className={cn(
-                      "py-2 rounded-lg font-medium transition-all",
+                      "rounded-md border py-2 text-sm font-semibold transition-colors",
                       tipPercent === preset && !customTip
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary hover:bg-secondary/80"
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-secondary text-secondary-foreground hover:bg-accent"
                     )}
                   >
                     {preset}%
@@ -159,28 +157,26 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                   value={customTip}
                   onChange={(e) => setCustomTip(e.target.value)}
                   placeholder="Custom tip %"
-                  className="w-full pr-10 pl-4 py-3 rounded-lg border bg-background focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className="w-full rounded-md border border-input bg-background py-2.5 pl-4 pr-10 text-base font-medium tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
             </div>
 
             {/* Number of People */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Split Between</label>
+              <label className="text-sm font-semibold">Split Between</label>
               
               {/* Quick presets */}
               <div className="grid grid-cols-4 gap-2 mb-3">
                 {[1, 2, 3, 4].map((num) => (
                   <motion.button
                     key={num}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
                     onClick={() => setNumberOfPeople(num)}
                     className={cn(
-                      "py-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-1",
+                      "flex items-center justify-center gap-1 rounded-md border py-2.5 text-sm font-semibold transition-colors",
                       numberOfPeople === num
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-secondary hover:bg-secondary/80"
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-secondary text-secondary-foreground hover:bg-accent"
                     )}
                   >
                     <Users className="h-4 w-4" />
@@ -190,10 +186,10 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
               </div>
               
               {/* Custom number with stepper */}
-              <div className="flex items-center gap-2 p-2 rounded-lg bg-secondary/50">
+              <div className="flex items-center gap-2 rounded-md border border-border bg-secondary p-2">
                 <button
                   onClick={() => setNumberOfPeople(Math.max(1, numberOfPeople - 1))}
-                  className="p-2 rounded-md hover:bg-accent active:bg-accent/70 transition-colors touch-manipulation"
+                  className="rounded-md border border-border bg-background p-2 transition-colors hover:bg-accent active:bg-accent touch-manipulation disabled:cursor-not-allowed disabled:opacity-40"
                   type="button"
                   disabled={numberOfPeople <= 1}
                 >
@@ -201,15 +197,15 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                 </button>
                 
                 <div className="flex-1 text-center">
-                  <div className="text-2xl font-bold">{numberOfPeople}</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="font-mono text-2xl font-semibold tabular-nums">{numberOfPeople}</div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">
                     {numberOfPeople === 1 ? 'person' : 'people'}
                   </div>
                 </div>
                 
                 <button
                   onClick={() => setNumberOfPeople(numberOfPeople + 1)}
-                  className="p-2 rounded-md hover:bg-accent active:bg-accent/70 transition-colors touch-manipulation"
+                  className="rounded-md border border-border bg-background p-2 transition-colors hover:bg-accent active:bg-accent touch-manipulation"
                   type="button"
                 >
                   <Plus className="h-5 w-5" />
@@ -219,17 +215,15 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
 
             {/* Rounding Options */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Rounding</label>
+              <label className="text-sm font-semibold">Rounding</label>
               <div className="grid grid-cols-3 gap-2">
                 <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
                   onClick={() => setRoundingMode("none")}
                   className={cn(
-                    "py-2.5 px-3 rounded-lg font-medium transition-all",
+                    "rounded-md border px-3 py-2.5 font-medium transition-colors",
                     roundingMode === "none"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary hover:bg-secondary/80"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-secondary hover:bg-accent"
                   )}
                   type="button"
                 >
@@ -238,14 +232,12 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                 </motion.button>
                 
                 <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
                   onClick={() => setRoundingMode("up")}
                   className={cn(
-                    "py-2.5 px-3 rounded-lg font-medium transition-all",
+                    "rounded-md border px-3 py-2.5 font-medium transition-colors",
                     roundingMode === "up"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary hover:bg-secondary/80"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-secondary hover:bg-accent"
                   )}
                   type="button"
                 >
@@ -254,14 +246,12 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                 </motion.button>
                 
                 <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
                   onClick={() => setRoundingMode("down")}
                   className={cn(
-                    "py-2.5 px-3 rounded-lg font-medium transition-all",
+                    "rounded-md border px-3 py-2.5 font-medium transition-colors",
                     roundingMode === "down"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-secondary hover:bg-secondary/80"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-secondary hover:bg-accent"
                   )}
                   type="button"
                 >
@@ -277,34 +267,34 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 exit={{ opacity: 0, height: 0 }}
-                className="space-y-4 pt-6 border-t"
+                className="space-y-4 border-t border-border pt-6"
               >
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Tip Amount</p>
-                    <p className="text-2xl font-bold">
+                    <p className="font-mono text-2xl font-semibold tabular-nums">
                       ${finalTipAmount.toFixed(2)}
                     </p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Total Amount</p>
-                    <p className="text-2xl font-bold">
+                    <p className="font-mono text-2xl font-semibold tabular-nums">
                       ${finalTotal.toFixed(2)}
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-primary/10 rounded-lg p-4 space-y-2">
+                <div className="space-y-2 rounded-md border border-border bg-secondary p-4">
                   <p className="text-lg font-semibold">Per Person</p>
                   <div className="flex justify-between items-center">
                     <span>Amount</span>
-                    <span className="font-bold">
+                    <span className="font-mono font-semibold tabular-nums">
                       ${finalPerPerson.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span>Tip</span>
-                    <span className="font-bold">
+                    <span className="font-mono font-semibold tabular-nums">
                       ${finalTipPerPerson.toFixed(2)}
                     </span>
                   </div>
@@ -317,21 +307,17 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                 )}
 
                 {/* Action Buttons */}
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
                     onClick={copyToClipboard}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-md border border-primary bg-primary py-3 font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
                   >
                     <Copy className="h-4 w-4" />
                     Copy Summary
                   </motion.button>
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
                     onClick={clearAll}
-                    className="px-6 py-3 bg-secondary text-secondary-foreground rounded-lg font-medium hover:bg-secondary/80 transition-colors"
+                    className="rounded-md border border-border bg-background px-6 py-3 font-semibold text-foreground transition-colors hover:bg-secondary"
                   >
                     Clear
                   </motion.button>
