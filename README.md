@@ -2,8 +2,6 @@
 
 ![Tip Calculator UI](./public/readme-preview.png)
 
-> Save the provided screenshot as `public/readme-preview.png` (or update the image path above).
-
 A polished tip calculator built with Next.js 15. Quickly calculate tips, split bills, apply rounding, and scan receipts with OCR.
 
 ## Features
