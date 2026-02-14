@@ -51,4 +51,4 @@ public/manifest.json
 
 ## License
 
-MIT
+[MIT](./LICENSE)
