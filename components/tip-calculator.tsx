@@ -1,21 +1,66 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
+import { useCallback, useEffect, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { DollarSign, Users, Percent, Copy, Moon, Sun, ScanLine, Minus, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
-import ReceiptScanner from "./receipt-scanner"
+
+type RoundingMode = "none" | "up" | "down"
+
+const TIP_PRESETS = [10, 15, 18, 20, 25] as const
+const PEOPLE_PRESETS = [1, 2, 3, 4] as const
+
+const STORAGE_KEYS = {
+  darkMode: "tip-calculator:dark-mode",
+  roundingMode: "tip-calculator:rounding-mode:v1",
+} as const
+
+const applyRounding = (amount: number, roundingMode: RoundingMode) => {
+  if (roundingMode === "up") return Math.ceil(amount)
+  if (roundingMode === "down") return Math.floor(amount)
+  return amount
+}
+
+const getStoredDarkMode = () => {
+  if (typeof window === "undefined") {
+    return false
+  }
+
+  const savedValue =
+    window.localStorage.getItem(STORAGE_KEYS.darkMode) ??
+    window.localStorage.getItem("darkMode")
+
+  return savedValue === "true"
+}
+
+const getStoredRoundingMode = (): RoundingMode => {
+  if (typeof window === "undefined") {
+    return "none"
+  }
+
+  const savedMode =
+    window.localStorage.getItem(STORAGE_KEYS.roundingMode) ??
+    window.localStorage.getItem("roundingMode")
+  if (savedMode === "none" || savedMode === "up" || savedMode === "down") {
+    return savedMode
+  }
+
+  return "none"
+}
+
+const ReceiptScanner = dynamic(() => import("./receipt-scanner"), {
+  ssr: false,
+})
 
 export default function TipCalculator() {
   const [billAmount, setBillAmount] = useState("")
   const [tipPercent, setTipPercent] = useState(15)
   const [customTip, setCustomTip] = useState("")
   const [numberOfPeople, setNumberOfPeople] = useState(1)
-  const [darkMode, setDarkMode] = useState(false)
-  const [roundingMode, setRoundingMode] = useState<"none" | "up" | "down">("none")
+  const [darkMode, setDarkMode] = useState(getStoredDarkMode)
+  const [roundingMode, setRoundingMode] = useState<RoundingMode>(getStoredRoundingMode)
   const [showScanner, setShowScanner] = useState(false)
-  
-  const tipPresets = [10, 15, 18, 20, 25]
 
   // Calculations
   const bill = parseFloat(billAmount) || 0
@@ -24,41 +69,30 @@ export default function TipCalculator() {
   const totalAmount = bill + tipAmount
   const perPersonAmount = totalAmount / numberOfPeople
 
-  // Apply rounding
-  const applyRounding = (amount: number) => {
-    if (roundingMode === "up") return Math.ceil(amount)
-    if (roundingMode === "down") return Math.floor(amount)
-    return amount
-  }
-
-  const finalPerPerson = applyRounding(perPersonAmount)
+  const finalPerPerson = applyRounding(perPersonAmount, roundingMode)
   const finalTotal = finalPerPerson * numberOfPeople
   const finalTipAmount = finalTotal - bill
   const finalTipPerPerson = finalTipAmount / numberOfPeople
 
   // Dark mode effect
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add("dark")
-    } else {
-      document.documentElement.classList.remove("dark")
-    }
+    document.documentElement.classList.toggle("dark", darkMode)
+    window.localStorage.setItem(STORAGE_KEYS.darkMode, darkMode.toString())
   }, [darkMode])
-
-  // Load preferences from localStorage
-  useEffect(() => {
-    const savedDarkMode = localStorage.getItem("darkMode") === "true"
-    const savedRounding = localStorage.getItem("roundingMode") as "none" | "up" | "down" || "none"
-    
-    setDarkMode(savedDarkMode)
-    setRoundingMode(savedRounding)
-  }, [])
 
   // Save preferences to localStorage
   useEffect(() => {
-    localStorage.setItem("darkMode", darkMode.toString())
-    localStorage.setItem("roundingMode", roundingMode)
-  }, [darkMode, roundingMode])
+    window.localStorage.setItem(STORAGE_KEYS.roundingMode, roundingMode)
+  }, [roundingMode])
+
+  const closeScanner = useCallback(() => {
+    setShowScanner(false)
+  }, [])
+
+  const handleAmountExtracted = useCallback((amount: number) => {
+    setBillAmount(amount.toFixed(2))
+    setShowScanner(false)
+  }, [])
 
   const copyToClipboard = () => {
     const text = `Bill: $${bill.toFixed(2)}
@@ -90,7 +124,7 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
               Tip Calculator
             </h1>
             <button
-              onClick={() => setDarkMode(!darkMode)}
+              onClick={() => setDarkMode((current) => !current)}
               className="flex h-10 w-10 items-center justify-center rounded-md border border-border bg-background transition-colors hover:bg-secondary"
               aria-label="Toggle dark mode"
             >
@@ -132,7 +166,7 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
             <div className="space-y-2">
               <label className="text-sm font-semibold">Tip %</label>
               <div className="grid grid-cols-5 gap-2 mb-3">
-                {tipPresets.map((preset) => (
+                {TIP_PRESETS.map((preset) => (
                   <motion.button
                     key={preset}
                     onClick={() => {
@@ -168,7 +202,7 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
               
               {/* Quick presets */}
               <div className="grid grid-cols-4 gap-2 mb-3">
-                {[1, 2, 3, 4].map((num) => (
+                {PEOPLE_PRESETS.map((num) => (
                   <motion.button
                     key={num}
                     onClick={() => setNumberOfPeople(num)}
@@ -188,7 +222,7 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
               {/* Custom number with stepper */}
               <div className="flex items-center gap-2 rounded-md border border-border bg-secondary p-2">
                 <button
-                  onClick={() => setNumberOfPeople(Math.max(1, numberOfPeople - 1))}
+                  onClick={() => setNumberOfPeople((current) => Math.max(1, current - 1))}
                   className="rounded-md border border-border bg-background p-2 transition-colors hover:bg-accent active:bg-accent touch-manipulation disabled:cursor-not-allowed disabled:opacity-40"
                   type="button"
                   disabled={numberOfPeople <= 1}
@@ -204,7 +238,7 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                 </div>
                 
                 <button
-                  onClick={() => setNumberOfPeople(numberOfPeople + 1)}
+                  onClick={() => setNumberOfPeople((current) => current + 1)}
                   className="rounded-md border border-border bg-background p-2 transition-colors hover:bg-accent active:bg-accent touch-manipulation"
                   type="button"
                 >
@@ -262,7 +296,7 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
             </div>
 
             {/* Results */}
-            {bill > 0 && (
+            {bill > 0 ? (
               <motion.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
@@ -300,11 +334,11 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                   </div>
                 </div>
 
-                {numberOfPeople > 1 && (
+                {numberOfPeople > 1 ? (
                   <p className="text-center text-sm text-muted-foreground">
                     You saved ${(finalTotal - finalPerPerson).toFixed(2)} by splitting!
                   </p>
-                )}
+                ) : null}
 
                 {/* Action Buttons */}
                 <div className="flex flex-col gap-2 sm:flex-row">
@@ -323,22 +357,19 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                   </motion.button>
                 </div>
               </motion.div>
-            )}
+            ) : null}
           </motion.div>
         </motion.div>
       </div>
 
       {/* Receipt Scanner Modal */}
       <AnimatePresence>
-        {showScanner && (
+        {showScanner ? (
           <ReceiptScanner
-            onAmountExtracted={(amount) => {
-              setBillAmount(amount.toFixed(2))
-              setShowScanner(false)
-            }}
-            onClose={() => setShowScanner(false)}
+            onAmountExtracted={handleAmountExtracted}
+            onClose={closeScanner}
           />
-        )}
+        ) : null}
       </AnimatePresence>
     </div>
   )

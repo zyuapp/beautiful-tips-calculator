@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import { AlertCircle, Camera, CheckCircle, Loader2, Upload, X } from "lucide-react"
 import NextImage from "next/image"
@@ -24,7 +24,7 @@ interface AmountChoicesProps {
   onManualEntry: () => void
 }
 
-const AmountChoices = ({
+const AmountChoices = memo(({
   title,
   amounts,
   onAmountSelect,
@@ -44,6 +44,7 @@ const AmountChoices = ({
             onClick={() => onAmountSelect(amount.value)}
             className="rounded-md border border-border bg-background p-2 text-center text-sm font-semibold font-mono tabular-nums transition-colors hover:bg-secondary"
             title={amount.context}
+            type="button"
           >
             ${amount.value.toFixed(2)}
           </button>
@@ -52,12 +53,15 @@ const AmountChoices = ({
       <button
         onClick={onManualEntry}
         className="mt-2 w-full rounded-md border border-border bg-secondary py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+        type="button"
       >
         Enter amount manually
       </button>
     </div>
   )
-}
+})
+
+AmountChoices.displayName = "AmountChoices"
 
 export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptScannerProps) {
   const [isProcessing, setIsProcessing] = useState(false)
@@ -68,6 +72,12 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const requestIdRef = useRef(0)
+
+  useEffect(() => {
+    return () => {
+      requestIdRef.current += 1
+    }
+  }, [])
 
   const resetScanState = useCallback(() => {
     setExtractedData(null)
@@ -198,12 +208,31 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
     [processImage]
   )
 
-  const alternativeAmounts =
-    extractedData?.allAmounts
-      .filter((amount) => amount.value !== extractedData.amount)
-      .slice(0, 8) || []
+  const openCameraInput = useCallback(() => {
+    cameraInputRef.current?.click()
+  }, [])
 
-  const suggestedAmounts = extractedData?.allAmounts.slice(0, 8) || []
+  const openFileInput = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+
+  const suggestedAmounts = useMemo(() => {
+    if (!extractedData) {
+      return []
+    }
+
+    return extractedData.allAmounts.slice(0, 8)
+  }, [extractedData])
+
+  const alternativeAmounts = useMemo(() => {
+    if (!extractedData) {
+      return []
+    }
+
+    return extractedData.allAmounts
+      .filter((amount) => amount.value !== extractedData.amount)
+      .slice(0, 8)
+  }, [extractedData])
 
   return (
     <motion.div
@@ -223,13 +252,17 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
       >
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold tracking-tight">Scan Receipt</h2>
-          <button onClick={onClose} className="rounded-md border border-border p-2 transition-colors hover:bg-secondary">
+          <button
+            onClick={onClose}
+            className="rounded-md border border-border p-2 transition-colors hover:bg-secondary"
+            type="button"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="max-h-[calc(90vh-80px)] space-y-6 overflow-y-auto p-5 sm:p-6">
-          {!imagePreview && !isProcessing && (
+          {!imagePreview && !isProcessing ? (
             <div className="space-y-4">
               <p className="text-muted-foreground text-center">
                 Take a photo or upload an image of your receipt
@@ -261,16 +294,18 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
 
               <div className="grid grid-cols-2 gap-4">
                 <motion.button
-                  onClick={() => cameraInputRef.current?.click()}
+                  onClick={openCameraInput}
                   className="flex flex-col items-center gap-3 rounded-md border border-border bg-background p-6 transition-colors hover:bg-secondary"
+                  type="button"
                 >
                   <Camera className="h-10 w-10 text-foreground" />
                   <span className="font-semibold">Take Photo</span>
                 </motion.button>
 
                 <motion.button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={openFileInput}
                   className="flex flex-col items-center gap-3 rounded-md border border-border bg-background p-6 transition-colors hover:bg-secondary"
+                  type="button"
                 >
                   <Upload className="h-10 w-10 text-foreground" />
                   <span className="font-semibold">Upload Image</span>
@@ -297,9 +332,9 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
                 className="hidden"
               />
             </div>
-          )}
+          ) : null}
 
-          {isProcessing && (
+          {isProcessing ? (
             <div className="space-y-4">
               <div className="flex flex-col items-center gap-4">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -319,7 +354,7 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
                   </div>
                 </div>
               </div>
-              {imagePreview && (
+              {imagePreview ? (
                 <div className="relative w-full h-64">
                   <NextImage
                     src={imagePreview}
@@ -328,13 +363,13 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
                     className="rounded-md border border-border object-contain opacity-50"
                   />
                 </div>
-              )}
+              ) : null}
             </div>
-          )}
+          ) : null}
 
-          {extractedData && !isProcessing && (
+          {extractedData && !isProcessing ? (
             <div className="space-y-6">
-              {imagePreview && (
+              {imagePreview ? (
                 <div className="relative w-full h-96">
                   <NextImage
                     src={imagePreview}
@@ -343,7 +378,7 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
                     className="object-contain rounded-lg"
                   />
                 </div>
-              )}
+              ) : null}
 
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
@@ -367,18 +402,19 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
                     <motion.button
                       onClick={() => confirmAmount(extractedData.amount)}
                       className="w-full rounded-md border border-primary bg-primary py-3 font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+                      type="button"
                     >
                       Use This Amount
                     </motion.button>
 
-                    {alternativeAmounts.length > 0 && (
+                    {alternativeAmounts.length > 0 ? (
                       <AmountChoices
                         title="Other amounts found:"
                         amounts={alternativeAmounts}
                         onAmountSelect={confirmAmount}
                         onManualEntry={handleManualAmountEntry}
                       />
-                    )}
+                    ) : null}
                   </div>
                 ) : (
                   <div className="text-center space-y-2">
@@ -392,35 +428,37 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
                 <button
                   onClick={resetScanState}
                   className="w-full rounded-md border border-border bg-background py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+                  type="button"
                 >
                   Try Another Image
                 </button>
               </div>
             </div>
-          )}
+          ) : null}
 
-          {error && (
+          {error ? (
             <div className="text-center space-y-4">
               <AlertCircle className="h-12 w-12 text-destructive mx-auto" />
               <p className="text-destructive">{error}</p>
 
-              {extractedData && suggestedAmounts.length > 0 && (
+              {extractedData && suggestedAmounts.length > 0 ? (
                 <AmountChoices
                   title={suggestedAmounts.length === 1 ? "Use this amount:" : "Other amounts found:"}
                   amounts={suggestedAmounts}
                   onAmountSelect={confirmAmount}
                   onManualEntry={handleManualAmountEntry}
                 />
-              )}
+              ) : null}
 
               <button
                 onClick={resetScanState}
                 className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+                type="button"
               >
                 Try Again
               </button>
             </div>
-          )}
+          ) : null}
         </div>
       </motion.div>
     </motion.div>
