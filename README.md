@@ -3,10 +3,12 @@
 ![Tip Calculator UI](./public/readme-preview.png)
 
 A polished tip calculator built with Next.js 15. Quickly calculate tips, split bills, apply rounding, and scan receipts with OCR.
+Designed mobile-first, with touch-friendly controls for one-handed use on phones.
 
 ## Features
 
 - Preset tip buttons (10/15/18/20/25) plus custom tip percentages
+- Mobile-first layout optimized for phone screens and touch interaction
 - Bill splitting with live per-person totals
 - Rounding modes: none, round up, or round down
 - Receipt scanner with client-side OCR (camera or upload)
