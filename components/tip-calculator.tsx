@@ -58,9 +58,10 @@ export default function TipCalculator() {
   const [tipPercent, setTipPercent] = useState(15)
   const [customTip, setCustomTip] = useState("")
   const [numberOfPeople, setNumberOfPeople] = useState(1)
-  const [darkMode, setDarkMode] = useState(getStoredDarkMode)
-  const [roundingMode, setRoundingMode] = useState<RoundingMode>(getStoredRoundingMode)
+  const [darkMode, setDarkMode] = useState(false)
+  const [roundingMode, setRoundingMode] = useState<RoundingMode>("none")
   const [showScanner, setShowScanner] = useState(false)
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false)
 
   // Calculations
   const bill = parseFloat(billAmount) || 0
@@ -74,16 +75,27 @@ export default function TipCalculator() {
   const finalTipAmount = finalTotal - bill
   const finalTipPerPerson = finalTipAmount / numberOfPeople
 
+  // Hydrate with the same defaults as the server before restoring preferences.
+  useEffect(() => {
+    setDarkMode(getStoredDarkMode())
+    setRoundingMode(getStoredRoundingMode())
+    setPreferencesLoaded(true)
+  }, [])
+
   // Dark mode effect
   useEffect(() => {
+    if (!preferencesLoaded) return
+
     document.documentElement.classList.toggle("dark", darkMode)
     window.localStorage.setItem(STORAGE_KEYS.darkMode, darkMode.toString())
-  }, [darkMode])
+  }, [darkMode, preferencesLoaded])
 
   // Save preferences to localStorage
   useEffect(() => {
+    if (!preferencesLoaded) return
+
     window.localStorage.setItem(STORAGE_KEYS.roundingMode, roundingMode)
-  }, [roundingMode])
+  }, [roundingMode, preferencesLoaded])
 
   const closeScanner = useCallback(() => {
     setShowScanner(false)
