@@ -239,7 +239,7 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <motion.div
@@ -271,7 +271,7 @@ export default function ReceiptScanner({ onAmountExtracted, onClose }: ReceiptSc
               <div className="rounded-md border border-border bg-secondary p-3">
                 <div className="flex items-start gap-2">
                   <svg
-                    className="mt-0.5 h-5 w-5 flex-shrink-0 text-foreground"
+                    className="mt-0.5 h-5 w-5 shrink-0 text-foreground"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"

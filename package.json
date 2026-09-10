@@ -23,21 +23,22 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^2.1.0",
+    "@eslint/eslintrc": "^3.3.5",
     "@types/node": "^22.20.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.54.0",
-    "@typescript-eslint/parser": "^8.54.0",
+    "@typescript-eslint/eslint-plugin": "^8.58.2",
+    "@typescript-eslint/parser": "^8.58.2",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.4",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.0.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.54.0",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "@tailwindcss/postcss": "^4.2.2"
   }
 }

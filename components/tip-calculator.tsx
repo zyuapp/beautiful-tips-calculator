@@ -124,7 +124,7 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
 
   return (
     <div className="min-h-screen bg-background transition-colors duration-200">
-      <div className="container mx-auto max-w-3xl px-4 py-6 sm:py-10">
+      <div className="mx-auto max-w-3xl px-4 py-6 sm:py-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -146,14 +146,14 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
 
           {/* Main Calculator Card */}
           <motion.div
-            className="space-y-6 rounded-lg border border-border bg-card p-5 shadow-sm sm:p-6"
+            className="space-y-6 rounded-lg border border-border bg-card p-5 shadow-xs sm:p-6"
             initial={{ scale: 0.95 }}
             animate={{ scale: 1 }}
             transition={{ duration: 0.2 }}
           >
             {/* Bill Amount Input */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold">Bill Amount</label>
+              <label className="block text-sm font-semibold">Bill Amount</label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <input
@@ -161,7 +161,7 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                   value={billAmount}
                   onChange={(e) => setBillAmount(e.target.value)}
                   placeholder="0.00"
-                  className="w-full rounded-md border border-input bg-background py-2.5 pl-10 pr-12 text-base font-medium tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full rounded-md border border-input bg-background py-2.5 pl-10 pr-12 text-base font-medium tabular-nums focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 <button
                   onClick={() => setShowScanner(true)}
@@ -176,7 +176,7 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
 
             {/* Tip Percentage */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold">Tip %</label>
+              <label className="block text-sm font-semibold">Tip %</label>
               <div className="grid grid-cols-5 gap-2 mb-3">
                 {TIP_PRESETS.map((preset) => (
                   <motion.button
@@ -203,14 +203,14 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
                   value={customTip}
                   onChange={(e) => setCustomTip(e.target.value)}
                   placeholder="Custom tip %"
-                  className="w-full rounded-md border border-input bg-background py-2.5 pl-4 pr-10 text-base font-medium tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full rounded-md border border-input bg-background py-2.5 pl-4 pr-10 text-base font-medium tabular-nums focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
             </div>
 
             {/* Number of People */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold">Split Between</label>
+              <label className="block text-sm font-semibold">Split Between</label>
               
               {/* Quick presets */}
               <div className="grid grid-cols-4 gap-2 mb-3">
@@ -261,7 +261,7 @@ Split ${numberOfPeople} ways: $${finalPerPerson.toFixed(2)} each`
 
             {/* Rounding Options */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold">Rounding</label>
+              <label className="block text-sm font-semibold">Rounding</label>
               <div className="grid grid-cols-3 gap-2">
                 <motion.button
                   onClick={() => setRoundingMode("none")}

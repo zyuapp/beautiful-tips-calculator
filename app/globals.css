@@ -1,6 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.ts";
 
 :root {
   --background: 0 0% 98%;
@@ -47,7 +46,18 @@
   --ring: 0 0% 78%;
 }
 
+/* Keep the existing form controls' appearance across the v4 Preflight update. */
 @layer base {
+  input::placeholder,
+  textarea::placeholder {
+    color: #9ca3af;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
   * {
     @apply border-border;
   }
